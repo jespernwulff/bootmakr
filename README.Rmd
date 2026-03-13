@@ -9,7 +9,8 @@ knitr::opts_chunk$set(
   fig.path = "man/figures/README-",
   fig.width = 7,
   fig.height = 5,
-  dpi = 150
+  dpi = 150,
+  eval = FALSE
 )
 ```
 
@@ -50,7 +51,7 @@ these complications.
 We use the Darfur data from `sensemakr`, with the full model specification
 including village fixed effects and `female` as the benchmark covariate:
 
-```{r quickstart, message = FALSE}
+```r
 library(bootmakr)
 
 data(darfur, package = "sensemakr")
@@ -63,11 +64,23 @@ out <- bootmakr(
   benchmark_covariates = "female",
   kd      = 1,
   reps    = 500,
-  seed    = 42,
-  progress = FALSE
+  seed    = 42
 )
 out
 ```
+
+    #> Bootstrapping (500 reps)
+    #> |==================================================| 100%
+    #>
+    #> Bootstrap sensitivity analysis (500 reps, n = 1,276)
+    #> Benchmark: female | kd = 1, ky = 1
+    #>
+    #> Adjusted estimates (percentile 95% CI):
+    #>                Estimate Std. Err     2.5%    97.5% Pr(>|0|)
+    #> directlyharmed 0.075220 0.026589 0.014209 0.119091    0.012 *
+    #> ---
+    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    #> (H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)
 
 ## Sweeping across benchmark strengths
 
@@ -76,7 +89,7 @@ hypothetical confounder grows stronger. The `plot()` method produces a
 coefficient plot with bootstrap CIs. Here the simple (non-clustered) bootstrap
 accounts for heteroskedasticity induced by the village fixed effects:
 
-```{r kd-sweep, fig.height = 4.5}
+```r
 out_sweep <- bootmakr(
   peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
     pastvoted + hhsize_darfur + female + village,
@@ -85,19 +98,29 @@ out_sweep <- bootmakr(
   benchmark_covariates = "female",
   kd      = 1:3,
   reps    = 500,
-  seed    = 42,
-  progress = FALSE
+  seed    = 42
 )
 out_sweep
 plot(out_sweep, type = "kd_sweep")
 ```
+
+    #> Bootstrap sensitivity analysis (500 reps, n = 1,276)
+    #> Benchmark: female | kd = 1 2 3, ky = 1 2 3
+    #>
+    #> Adjusted estimates (percentile 95% CI):
+    #>                       Estimate Std. Err      2.5%    97.5% Pr(>|0|)
+    #> directlyharmed (kd=1) 0.075220 0.026589  0.014209 0.119091    0.012 *
+    #> directlyharmed (kd=2) 0.052915 0.031626 -0.025391 0.098804     0.18
+    #> directlyharmed (kd=3) 0.030396 0.038848 -0.062536 0.083173    0.656
+
+![](man/figures/README-kd-sweep-1.png)
 
 ## Cluster bootstrap
 
 If observations are correlated within villages, pass `cluster = "village"` for
 a cluster-robust bootstrap — the resampling is done at the village level:
 
-```{r cluster, fig.height = 4.5}
+```r
 out_cl <- bootmakr(
   peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
     pastvoted + hhsize_darfur + female + village,
@@ -107,12 +130,22 @@ out_cl <- bootmakr(
   kd      = 1:3,
   reps    = 500,
   seed    = 42,
-  cluster = "village",
-  progress = FALSE
+  cluster = "village"
 )
 out_cl
 plot(out_cl, type = "kd_sweep")
 ```
+
+    #> Bootstrap sensitivity analysis (500 reps, n = 1,276, 486 clusters)
+    #> Benchmark: female | kd = 1 2 3, ky = 1 2 3
+    #>
+    #> Adjusted estimates (percentile 95% CI):
+    #>                       Estimate Std. Err      2.5%    97.5% Pr(>|0|)
+    #> directlyharmed (kd=1) 0.075220 0.025932  0.022021 0.125235    0.004 **
+    #> directlyharmed (kd=2) 0.052915 0.033005 -0.015680 0.114647     0.12
+    #> directlyharmed (kd=3) 0.030396 0.043038 -0.062151 0.110465    0.452
+
+![](man/figures/README-cluster-1.png)
 
 ## Grouped benchmarks
 
@@ -121,7 +154,7 @@ explanatory power of several covariates, use `gbenchmark_covariates`.
 Internally this computes the group partial R² (via
 `sensemakr::group_partial_r2`) and applies the proper nonlinear kd-scaling:
 
-```{r grouped, eval = FALSE}
+```r
 out_g <- bootmakr(
   lg_ceopay ~ owner_ceo + ceo_tenure + PA_nic3_med + ceo_edu_dummy +
     lg_sales + firm_age + promoters_pct + institutions_pct + year + nic,
@@ -142,7 +175,7 @@ Large-sample bootstrap inference depends on using enough replications. Pass
 `converge = TRUE` (or a list with fine-grained control) to assess whether SEs
 and *p*-values have stabilised:
 
-```{r convergence, fig.height = 7}
+```r
 out_conv <- bootmakr(
   peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
     pastvoted + hhsize_darfur + female + village,
@@ -153,25 +186,45 @@ out_conv <- bootmakr(
   reps    = 1000,
   seed    = 42,
   cluster = "village",
-  converge = list(minreps = 100, stepsize = 100, threshold = 750),
-  progress = FALSE
+  converge = list(minreps = 100, stepsize = 100, threshold = 750)
 )
 out_conv
 plot(out_conv, type = "convergence")
 ```
+
+    #> Bootstrap sensitivity analysis (1,000 reps, n = 1,276, 486 clusters)
+    #> Benchmark: female | kd = 1, ky = 1
+    #>
+    #> Adjusted estimates (percentile 95% CI):
+    #>                Estimate Std. Err     2.5%    97.5% Pr(>|0|)
+    #> directlyharmed 0.075220 0.025740 0.021085 0.125726    0.006 **
+    #> ---
+    #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    #>
+    #> Convergence diagnostics (reps 100 to 1000 by 100, threshold = 750):
+    #>              Mean  Range  CV % Range (>=750) CV% (>=750)
+    #> Std. error 0.0265 0.0020  2.81        0.0003        0.52
+    #> P-value    0.0025 0.0067 99.83        0.0042       44.27
+
+![](man/figures/README-convergence-1.png)
 
 ## Accessing the raw bootstrap draws
 
 All bootstrap replicates are stored in the returned object, so there is no
 need to re-run the analysis to inspect the distribution:
 
-```{r draws}
+```r
 draws <- out_cl$boot_samples[, 1]      # vector of B adjusted estimates
 draws <- draws[is.finite(draws)]
 
 # Percentiles, moments, etc.
 quantile(draws, c(0.025, 0.5, 0.975))
+```
 
+    #>       2.5%        50%      97.5%
+    #> 0.02202123 0.07639723 0.12523541
+
+```r
 # Or export for further analysis
 # write.csv(data.frame(adjusted_estimate = draws), "boot_draws.csv")
 ```
@@ -201,13 +254,17 @@ quantile(draws, c(0.025, 0.5, 0.975))
 | `plot(x)` | Auto-selects the most informative plot |
 
 ## References
+
 Cinelli, C. and Hazlett, C. (2020). Making Sense of Sensitivity: Extending
 Omitted Variable Bias. *Journal of the Royal Statistical Society, Series B
 (Statistical Methodology)*, 82(1), 39–67.
 
-Cinelli, C., J. Ferwerda, and C. Hazlett (2024). sensemakr: Sensitivity analysis tools for OLS in R and Stata. *Observational Studies*, 10(2), 93-127. 
+Cinelli, C., J. Ferwerda, and C. Hazlett (2024). sensemakr: Sensitivity
+analysis tools for OLS in R and Stata. *Observational Studies*, 10(2),
+93–127.
 
-Lonati, S. and J. N. Wulff (2026). Why you should not use the ITCV with robust standard errors (and what to do instead). *SSRN Working Paper*.
+Lonati, S. and J. N. Wulff (2026). Why you should not use the ITCV with
+robust standard errors (and what to do instead). *SSRN Working Paper*.
 
 ## License
 
