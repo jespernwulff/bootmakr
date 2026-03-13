@@ -37,18 +37,23 @@ so the CIs and *p*-values are robust to these complications.
 
 ## Quick start
 
+We use the Darfur data from `sensemakr`, with the full model
+specification including village fixed effects and `female` as the
+benchmark covariate:
+
 ``` r
 library(bootmakr)
 
 data(darfur, package = "sensemakr")
 
 out <- bootmakr(
-  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar + pastvoted,
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+    pastvoted + hhsize_darfur + female + village,
   data    = darfur,
   treat   = "directlyharmed",
-  benchmark_covariates = "age",
+  benchmark_covariates = "female",
   kd      = 1,
-  reps    = 1000,
+  reps    = 500,
   seed    = 42,
   progress = FALSE
 )
@@ -56,16 +61,16 @@ out
 #> 
 #> Call:
 #> bootmakr(formula = peacefactor ~ directlyharmed + age + farmer_dar + 
-#>     herder_dar + pastvoted, data = darfur, treat = "directlyharmed", 
-#>     benchmark_covariates = "age", kd = 1, reps = 1000, seed = 42, 
-#>     progress = FALSE)
+#>     herder_dar + pastvoted + hhsize_darfur + female + village, 
+#>     data = darfur, treat = "directlyharmed", benchmark_covariates = "female", 
+#>     kd = 1, reps = 500, seed = 42, progress = FALSE)
 #> 
-#> Bootstrap sensitivity analysis (1,000 reps, n = 1,276)
-#> Benchmark: age | kd = 1, ky = 1
+#> Bootstrap sensitivity analysis (500 reps, n = 1,276)
+#> Benchmark: female | kd = 1, ky = 1
 #> 
 #> Adjusted estimates (percentile 95% CI):
-#>                Estimate Std. Err     2.5%    97.5% Pr(>|0|)   
-#> directlyharmed 0.060236 0.019465 0.022831 0.097697    0.004 **
+#>                Estimate Std. Err     2.5%    97.5% Pr(>|0|)  
+#> directlyharmed 0.075220 0.026589 0.014209 0.119091    0.012 *
 #> ---
 #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 #> (H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)
@@ -75,16 +80,19 @@ out
 
 Supply a vector of `kd` values to see how the adjusted effect changes as
 the hypothetical confounder grows stronger. The `plot()` method produces
-a coefficient plot with bootstrap CIs:
+a coefficient plot with bootstrap CIs. Here the simple (non-clustered)
+bootstrap accounts for heteroskedasticity induced by the village fixed
+effects:
 
 ``` r
 out_sweep <- bootmakr(
-  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar + pastvoted,
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+    pastvoted + hhsize_darfur + female + village,
   data    = darfur,
   treat   = "directlyharmed",
-  benchmark_covariates = "age",
-  kd      = seq(0.5, 3, by = 0.5),
-  reps    = 1000,
+  benchmark_covariates = "female",
+  kd      = 1:3,
+  reps    = 500,
   seed    = 42,
   progress = FALSE
 )
@@ -92,21 +100,18 @@ out_sweep
 #> 
 #> Call:
 #> bootmakr(formula = peacefactor ~ directlyharmed + age + farmer_dar + 
-#>     herder_dar + pastvoted, data = darfur, treat = "directlyharmed", 
-#>     benchmark_covariates = "age", kd = seq(0.5, 3, by = 0.5), 
-#>     reps = 1000, seed = 42, progress = FALSE)
+#>     herder_dar + pastvoted + hhsize_darfur + female + village, 
+#>     data = darfur, treat = "directlyharmed", benchmark_covariates = "female", 
+#>     kd = 1:3, reps = 500, seed = 42, progress = FALSE)
 #> 
-#> Bootstrap sensitivity analysis (1,000 reps, n = 1,276)
-#> Benchmark: age | kd = 0.5 1 1.5 2 2.5 3, ky = 0.5 1 1.5 2 2.5 3
+#> Bootstrap sensitivity analysis (500 reps, n = 1,276)
+#> Benchmark: female | kd = 1 2 3, ky = 1 2 3
 #> 
 #> Adjusted estimates (percentile 95% CI):
-#>                         Estimate Std. Err     2.5%    97.5% Pr(>|0|)   
-#> directlyharmed (kd=0.5) 0.060720 0.019445 0.023569 0.098267    0.004 **
-#> directlyharmed (kd=1)   0.060236 0.019465 0.022831 0.097697    0.004 **
-#> directlyharmed (kd=1.5) 0.059752 0.019504 0.022081 0.097408    0.004 **
-#> directlyharmed (kd=2)   0.059268 0.019562 0.021542 0.097064    0.006 **
-#> directlyharmed (kd=2.5) 0.058784 0.019639 0.021089 0.096775    0.004 **
-#> directlyharmed (kd=3)   0.058299 0.019735 0.020823 0.096479    0.004 **
+#>                       Estimate Std. Err      2.5%    97.5% Pr(>|0|)  
+#> directlyharmed (kd=1) 0.075220 0.026589  0.014209 0.119091    0.012 *
+#> directlyharmed (kd=2) 0.052915 0.031626 -0.025391 0.098804     0.18  
+#> directlyharmed (kd=3) 0.030396 0.038848 -0.062536 0.083173    0.656  
 #> ---
 #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 #> (H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)
@@ -117,43 +122,46 @@ plot(out_sweep, type = "kd_sweep")
 
 ## Cluster bootstrap
 
-Pass a cluster identifier to `cluster` for a cluster-robust bootstrap —
-the resampling is done at the cluster level:
+If observations are correlated within villages, pass
+`cluster = "village"` for a cluster-robust bootstrap — the resampling is
+done at the village level:
 
 ``` r
-# Simulated clustered data
-set.seed(999)
-G  <- rep(1:50, each = 20)
-u  <- rnorm(50)[G]
-x  <- 0.5 * u + rnorm(1000)
-cv <- 0.3 * u + rnorm(1000)
-y  <- 0.5 * x + 0.4 * cv + 0.8 * u + rnorm(1000)
-sim <- data.frame(y = y, x = x, cv = cv, cid = G)
-
 out_cl <- bootmakr(
-  y ~ x + cv, data = sim, treat = "x",
-  benchmark_covariates = "cv", kd = c(0.5, 1),
-  reps = 1000, seed = 77, cluster = "cid",
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+    pastvoted + hhsize_darfur + female + village,
+  data    = darfur,
+  treat   = "directlyharmed",
+  benchmark_covariates = "female",
+  kd      = 1:3,
+  reps    = 500,
+  seed    = 42,
+  cluster = "village",
   progress = FALSE
 )
 out_cl
 #> 
 #> Call:
-#> bootmakr(formula = y ~ x + cv, data = sim, treat = "x", benchmark_covariates = "cv", 
-#>     kd = c(0.5, 1), reps = 1000, seed = 77, cluster = "cid", 
-#>     progress = FALSE)
+#> bootmakr(formula = peacefactor ~ directlyharmed + age + farmer_dar + 
+#>     herder_dar + pastvoted + hhsize_darfur + female + village, 
+#>     data = darfur, treat = "directlyharmed", benchmark_covariates = "female", 
+#>     kd = 1:3, reps = 500, seed = 42, cluster = "village", progress = FALSE)
 #> 
-#> Bootstrap sensitivity analysis (1,000 reps, n = 1,000, 50 clusters)
-#> Benchmark: cv | kd = 0.5 1, ky = 0.5 1
+#> Bootstrap sensitivity analysis (500 reps, n = 1,276, 486 clusters)
+#> Benchmark: female | kd = 1 2 3, ky = 1 2 3
 #> 
 #> Adjusted estimates (percentile 95% CI):
-#>            Estimate Std. Err     2.5%    97.5% Pr(>|0|)    
-#> x (kd=0.5) 0.769341 0.056165 0.657107 0.877216        0 ***
-#> x (kd=1)   0.755700 0.052849 0.647354 0.853459        0 ***
+#>                       Estimate Std. Err      2.5%    97.5% Pr(>|0|)   
+#> directlyharmed (kd=1) 0.075220 0.025932  0.022021 0.125235    0.004 **
+#> directlyharmed (kd=2) 0.052915 0.033005 -0.015680 0.114647     0.12   
+#> directlyharmed (kd=3) 0.030396 0.043038 -0.062151 0.110465    0.452   
 #> ---
 #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 #> (H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)
+plot(out_cl, type = "kd_sweep")
 ```
+
+![](man/figures/README-cluster-1.png)<!-- -->
 
 ## Grouped benchmarks
 
@@ -171,11 +179,11 @@ out_g <- bootmakr(
   treat   = "owner_ceo",
   gbenchmark_covariates = c("ceo_tenure", "ceo_edu_dummy"),
   kd      = seq(0.1, 0.5, by = 0.1),
-  reps    = 10000,
+  reps    = 500,
   cluster = "firm_id",
   seed    = 912323
 )
-out_g
+plot(out_g, type = "kd_sweep")
 ```
 
 ## Convergence diagnostics
@@ -186,39 +194,41 @@ whether SEs and *p*-values have stabilised:
 
 ``` r
 out_conv <- bootmakr(
-  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar + pastvoted,
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+    pastvoted + hhsize_darfur + female + village,
   data    = darfur,
   treat   = "directlyharmed",
-  benchmark_covariates = "age",
+  benchmark_covariates = "female",
   kd      = 1,
-  reps    = 2000,
+  reps    = 1000,
   seed    = 42,
-  converge = list(minreps = 200, stepsize = 200, threshold = 1500),
+  cluster = "village",
+  converge = list(minreps = 100, stepsize = 100, threshold = 750),
   progress = FALSE
 )
 out_conv
 #> 
 #> Call:
 #> bootmakr(formula = peacefactor ~ directlyharmed + age + farmer_dar + 
-#>     herder_dar + pastvoted, data = darfur, treat = "directlyharmed", 
-#>     benchmark_covariates = "age", kd = 1, reps = 2000, seed = 42, 
-#>     progress = FALSE, converge = list(minreps = 200, stepsize = 200, 
-#>         threshold = 1500))
+#>     herder_dar + pastvoted + hhsize_darfur + female + village, 
+#>     data = darfur, treat = "directlyharmed", benchmark_covariates = "female", 
+#>     kd = 1, reps = 1000, seed = 42, cluster = "village", progress = FALSE, 
+#>     converge = list(minreps = 100, stepsize = 100, threshold = 750))
 #> 
-#> Bootstrap sensitivity analysis (2,000 reps, n = 1,276)
-#> Benchmark: age | kd = 1, ky = 1
+#> Bootstrap sensitivity analysis (1,000 reps, n = 1,276, 486 clusters)
+#> Benchmark: female | kd = 1, ky = 1
 #> 
 #> Adjusted estimates (percentile 95% CI):
 #>                Estimate Std. Err     2.5%    97.5% Pr(>|0|)   
-#> directlyharmed 0.060236 0.019539 0.022839 0.098752    0.003 **
+#> directlyharmed 0.075220 0.025740 0.021085 0.125726    0.006 **
 #> ---
 #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 #> (H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)
 #> 
-#> Convergence diagnostics (reps 200 to 2000 by 200, threshold = 1500):
-#>              Mean  Range  CV % Range (>=1500) CV% (>=1500)
-#> Std. error 0.0194 0.0011  2.13         0.0002         0.57
-#> P-value    0.0022 0.0040 71.91         0.0008        14.24
+#> Convergence diagnostics (reps 100 to 1000 by 100, threshold = 750):
+#>              Mean  Range  CV % Range (>=750) CV% (>=750)
+#> Std. error 0.0265 0.0020  2.81        0.0003        0.52
+#> P-value    0.0025 0.0067 99.83        0.0042       44.27
 #> (CV % = coefficient of variation: sd / mean * 100)
 plot(out_conv, type = "convergence")
 ```
@@ -231,13 +241,13 @@ All bootstrap replicates are stored in the returned object, so there is
 no need to re-run the analysis to inspect the distribution:
 
 ``` r
-draws <- out$boot_samples[, 1]          # vector of B adjusted estimates
+draws <- out_cl$boot_samples[, 1]      # vector of B adjusted estimates
 draws <- draws[is.finite(draws)]
 
 # Percentiles, moments, etc.
 quantile(draws, c(0.025, 0.5, 0.975))
 #>       2.5%        50%      97.5% 
-#> 0.02283058 0.05960335 0.09769660
+#> 0.02202080 0.07589556 0.12523548
 
 # Or export for further analysis
 # write.csv(data.frame(adjusted_estimate = draws), "boot_draws.csv")
@@ -273,11 +283,11 @@ Cinelli, C. and Hazlett, C. (2020). Making Sense of Sensitivity:
 Extending Omitted Variable Bias. *Journal of the Royal Statistical
 Society, Series B (Statistical Methodology)*, 82(1), 39–67.
 
-Cinelli, C., Ferwerda, J. and Hazlett, C. (2024). sensemakr: Sensitivity
+Cinelli, C., J. Ferwerda, and C. Hazlett (2024). sensemakr: Sensitivity
 analysis tools for OLS in R and Stata. *Observational Studies*, 10(2),
 93-127.
 
-Lonati, S. and Wulff, J. N. (2026). Why you should not use the ITCV with
+Lonati, S. and J. N. Wulff (2026). Why you should not use the ITCV with
 robust standard errors (and what to do instead). *SSRN Working Paper*.
 
 ## License

@@ -47,18 +47,22 @@ these complications.
 
 ## Quick start
 
+We use the Darfur data from `sensemakr`, with the full model specification
+including village fixed effects and `female` as the benchmark covariate:
+
 ```{r quickstart, message = FALSE}
 library(bootmakr)
 
 data(darfur, package = "sensemakr")
 
 out <- bootmakr(
-  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar + pastvoted,
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+    pastvoted + hhsize_darfur + female + village,
   data    = darfur,
   treat   = "directlyharmed",
-  benchmark_covariates = "age",
+  benchmark_covariates = "female",
   kd      = 1,
-  reps    = 1000,
+  reps    = 500,
   seed    = 42,
   progress = FALSE
 )
@@ -69,16 +73,18 @@ out
 
 Supply a vector of `kd` values to see how the adjusted effect changes as the
 hypothetical confounder grows stronger. The `plot()` method produces a
-coefficient plot with bootstrap CIs:
+coefficient plot with bootstrap CIs. Here the simple (non-clustered) bootstrap
+accounts for heteroskedasticity induced by the village fixed effects:
 
 ```{r kd-sweep, fig.height = 4.5}
 out_sweep <- bootmakr(
-  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar + pastvoted,
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+    pastvoted + hhsize_darfur + female + village,
   data    = darfur,
   treat   = "directlyharmed",
-  benchmark_covariates = "age",
-  kd      = seq(0.5, 3, by = 0.5),
-  reps    = 1000,
+  benchmark_covariates = "female",
+  kd      = 1:3,
+  reps    = 500,
   seed    = 42,
   progress = FALSE
 )
@@ -88,26 +94,24 @@ plot(out_sweep, type = "kd_sweep")
 
 ## Cluster bootstrap
 
-Pass a cluster identifier to `cluster` for a cluster-robust bootstrap — the
-resampling is done at the cluster level:
+If observations are correlated within villages, pass `cluster = "village"` for
+a cluster-robust bootstrap — the resampling is done at the village level:
 
-```{r cluster}
-# Simulated clustered data
-set.seed(999)
-G  <- rep(1:50, each = 20)
-u  <- rnorm(50)[G]
-x  <- 0.5 * u + rnorm(1000)
-cv <- 0.3 * u + rnorm(1000)
-y  <- 0.5 * x + 0.4 * cv + 0.8 * u + rnorm(1000)
-sim <- data.frame(y = y, x = x, cv = cv, cid = G)
-
+```{r cluster, fig.height = 4.5}
 out_cl <- bootmakr(
-  y ~ x + cv, data = sim, treat = "x",
-  benchmark_covariates = "cv", kd = c(0.5, 1),
-  reps = 1000, seed = 77, cluster = "cid",
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+    pastvoted + hhsize_darfur + female + village,
+  data    = darfur,
+  treat   = "directlyharmed",
+  benchmark_covariates = "female",
+  kd      = 1:3,
+  reps    = 500,
+  seed    = 42,
+  cluster = "village",
   progress = FALSE
 )
 out_cl
+plot(out_cl, type = "kd_sweep")
 ```
 
 ## Grouped benchmarks
@@ -125,11 +129,11 @@ out_g <- bootmakr(
   treat   = "owner_ceo",
   gbenchmark_covariates = c("ceo_tenure", "ceo_edu_dummy"),
   kd      = seq(0.1, 0.5, by = 0.1),
-  reps    = 10000,
+  reps    = 500,
   cluster = "firm_id",
   seed    = 912323
 )
-out_g
+plot(out_g, type = "kd_sweep")
 ```
 
 ## Convergence diagnostics
@@ -140,14 +144,16 @@ and *p*-values have stabilised:
 
 ```{r convergence, fig.height = 7}
 out_conv <- bootmakr(
-  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar + pastvoted,
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+    pastvoted + hhsize_darfur + female + village,
   data    = darfur,
   treat   = "directlyharmed",
-  benchmark_covariates = "age",
+  benchmark_covariates = "female",
   kd      = 1,
-  reps    = 2000,
+  reps    = 1000,
   seed    = 42,
-  converge = list(minreps = 200, stepsize = 200, threshold = 1500),
+  cluster = "village",
+  converge = list(minreps = 100, stepsize = 100, threshold = 750),
   progress = FALSE
 )
 out_conv
@@ -160,7 +166,7 @@ All bootstrap replicates are stored in the returned object, so there is no
 need to re-run the analysis to inspect the distribution:
 
 ```{r draws}
-draws <- out$boot_samples[, 1]          # vector of B adjusted estimates
+draws <- out_cl$boot_samples[, 1]      # vector of B adjusted estimates
 draws <- draws[is.finite(draws)]
 
 # Percentiles, moments, etc.
@@ -199,9 +205,9 @@ Cinelli, C. and Hazlett, C. (2020). Making Sense of Sensitivity: Extending
 Omitted Variable Bias. *Journal of the Royal Statistical Society, Series B
 (Statistical Methodology)*, 82(1), 39–67.
 
-Cinelli, C., Ferwerda, J. and Hazlett, C. (2024). sensemakr: Sensitivity analysis tools for OLS in R and Stata. *Observational Studies*, 10(2), 93-127.
+Cinelli, C., J. Ferwerda, and C. Hazlett (2024). sensemakr: Sensitivity analysis tools for OLS in R and Stata. *Observational Studies*, 10(2), 93-127. 
 
-Lonati, S. and Wulff, J. N. (2026). Why you should not use the ITCV with robust standard errors (and what to do instead). *SSRN Working Paper*.
+Lonati, S. and J. N. Wulff (2026). Why you should not use the ITCV with robust standard errors (and what to do instead). *SSRN Working Paper*.
 
 ## License
 
