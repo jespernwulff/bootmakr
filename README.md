@@ -132,79 +132,24 @@ sim <- data.frame(y = y, x = x, cv = cv, cid = G)
 
 out_cl <- bootmakr(
   y ~ x + cv, data = sim, treat = "x",
-  benchmark_covariates = "cv", kd = c(1, 2, 3),
+  benchmark_covariates = "cv", kd = c(0.5, 1),
   reps = 1000, seed = 77, cluster = "cid",
   progress = FALSE
 )
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
-#> Warning in ovb_partial_r2_bound.numeric(r2dxj.x = r2dxj.x[i], r2yxj.dx =
-#> r2yxj.dx[i], : Implied bound on r2yz.dx greater than 1, try lower kd and/or ky.
-#> Setting r2yz.dx to 1.
 out_cl
 #> 
 #> Call:
 #> bootmakr(formula = y ~ x + cv, data = sim, treat = "x", benchmark_covariates = "cv", 
-#>     kd = c(1, 2, 3), reps = 1000, seed = 77, cluster = "cid", 
+#>     kd = c(0.5, 1), reps = 1000, seed = 77, cluster = "cid", 
 #>     progress = FALSE)
 #> 
 #> Bootstrap sensitivity analysis (1,000 reps, n = 1,000, 50 clusters)
-#> Benchmark: cv | kd = 1 2 3, ky = 1 2 3
+#> Benchmark: cv | kd = 0.5 1, ky = 0.5 1
 #> 
 #> Adjusted estimates (percentile 95% CI):
-#>          Estimate Std. Err     2.5%    97.5% Pr(>|0|)    
-#> x (kd=1) 0.755700 0.052849 0.647354 0.853459        0 ***
-#> x (kd=2) 0.728366 0.051354 0.616263 0.821577        0 ***
-#> x (kd=3) 0.700961 0.057128 0.578025 0.804919        0 ***
+#>            Estimate Std. Err     2.5%    97.5% Pr(>|0|)    
+#> x (kd=0.5) 0.769341 0.056165 0.657107 0.877216        0 ***
+#> x (kd=1)   0.755700 0.052849 0.647354 0.853459        0 ***
 #> ---
 #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 #> (H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)
@@ -230,7 +175,7 @@ out_g <- bootmakr(
   cluster = "firm_id",
   seed    = 912323
 )
-plot(out_g, type = "kd_sweep")
+out_g
 ```
 
 ## Convergence diagnostics
@@ -327,6 +272,13 @@ quantile(draws, c(0.025, 0.5, 0.975))
 Cinelli, C. and Hazlett, C. (2020). Making Sense of Sensitivity:
 Extending Omitted Variable Bias. *Journal of the Royal Statistical
 Society, Series B (Statistical Methodology)*, 82(1), 39–67.
+
+Cinelli, C., Ferwerda, J. and Hazlett, C. (2024). sensemakr: Sensitivity
+analysis tools for OLS in R and Stata. *Observational Studies*, 10(2),
+93-127.
+
+Lonati, S. and Wulff, J. N. (2026). Why you should not use the ITCV with
+robust standard errors (and what to do instead). *SSRN Working Paper*.
 
 ## License
 

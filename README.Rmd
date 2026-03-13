@@ -103,7 +103,7 @@ sim <- data.frame(y = y, x = x, cv = cv, cid = G)
 
 out_cl <- bootmakr(
   y ~ x + cv, data = sim, treat = "x",
-  benchmark_covariates = "cv", kd = c(1, 2, 3),
+  benchmark_covariates = "cv", kd = c(0.5, 1),
   reps = 1000, seed = 77, cluster = "cid",
   progress = FALSE
 )
@@ -129,7 +129,7 @@ out_g <- bootmakr(
   cluster = "firm_id",
   seed    = 912323
 )
-plot(out_g, type = "kd_sweep")
+out_g
 ```
 
 ## Convergence diagnostics
@@ -198,6 +198,10 @@ quantile(draws, c(0.025, 0.5, 0.975))
 Cinelli, C. and Hazlett, C. (2020). Making Sense of Sensitivity: Extending
 Omitted Variable Bias. *Journal of the Royal Statistical Society, Series B
 (Statistical Methodology)*, 82(1), 39–67.
+
+Cinelli, C., Ferwerda, J. and Hazlett, C. (2024). sensemakr: Sensitivity analysis tools for OLS in R and Stata. *Observational Studies*, 10(2), 93-127.
+
+Lonati, S. and Wulff, J. N. (2026). Why you should not use the ITCV with robust standard errors (and what to do instead). *SSRN Working Paper*.
 
 ## License
 
