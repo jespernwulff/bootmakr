@@ -1,2 +1,8 @@
-^bootmakr\.Rproj$
+^README\.Rmd$
+^man/figures/README-.*\.png$
 ^\.Rproj\.user$
+^.*\.Rproj$
+^LICENSE\.md$
+^chen_replication\.R$
+^demo_bootmakr\.R$
+^Figure.*\.pdf$

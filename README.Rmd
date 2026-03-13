@@ -1,0 +1,204 @@
+---
+output: github_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  fig.width = 7,
+  fig.height = 5,
+  dpi = 150
+)
+```
+
+# bootmakr
+
+<!-- badges: start -->
+[![R-CMD-check](https://img.shields.io/badge/R--CMD--check-passing-brightgreen)](https://github.com/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+<!-- badges: end -->
+
+**Bootstrap inference for sensitivity analysis under omitted variable bias.**
+
+`bootmakr` wraps the
+[sensemakr](https://github.com/carloscinelli/sensemakr) package in a
+bootstrap loop, producing bootstrap standard errors, percentile confidence
+intervals, and *p*-values for the bias-adjusted treatment effect. It is the
+companion R package to the Stata command of the same name.
+
+## Why bootstrap the sensitivity bounds?
+
+`sensemakr` computes analytical adjusted estimates and confidence intervals
+under a hypothetical confounder with a given strength. These analytical
+intervals rely on asymptotic OLS standard errors, which may not perform well
+with clustered data, small samples, or complex survey designs. `bootmakr`
+replaces the analytical inference with a nonparametric bootstrap — including
+cluster and stratified bootstrap — so the CIs and *p*-values are robust to
+these complications.
+
+## Installation
+
+```r
+# Install from GitHub (once published):
+# devtools::install_github("username/bootmakr")
+```
+
+## Quick start
+
+```{r quickstart, message = FALSE}
+library(bootmakr)
+
+data(darfur, package = "sensemakr")
+
+out <- bootmakr(
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar + pastvoted,
+  data    = darfur,
+  treat   = "directlyharmed",
+  benchmark_covariates = "age",
+  kd      = 1,
+  reps    = 1000,
+  seed    = 42,
+  progress = FALSE
+)
+out
+```
+
+## Sweeping across benchmark strengths
+
+Supply a vector of `kd` values to see how the adjusted effect changes as the
+hypothetical confounder grows stronger. The `plot()` method produces a
+coefficient plot with bootstrap CIs:
+
+```{r kd-sweep, fig.height = 4.5}
+out_sweep <- bootmakr(
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar + pastvoted,
+  data    = darfur,
+  treat   = "directlyharmed",
+  benchmark_covariates = "age",
+  kd      = seq(0.5, 3, by = 0.5),
+  reps    = 1000,
+  seed    = 42,
+  progress = FALSE
+)
+out_sweep
+plot(out_sweep, type = "kd_sweep")
+```
+
+## Cluster bootstrap
+
+Pass a cluster identifier to `cluster` for a cluster-robust bootstrap — the
+resampling is done at the cluster level:
+
+```{r cluster}
+# Simulated clustered data
+set.seed(999)
+G  <- rep(1:50, each = 20)
+u  <- rnorm(50)[G]
+x  <- 0.5 * u + rnorm(1000)
+cv <- 0.3 * u + rnorm(1000)
+y  <- 0.5 * x + 0.4 * cv + 0.8 * u + rnorm(1000)
+sim <- data.frame(y = y, x = x, cv = cv, cid = G)
+
+out_cl <- bootmakr(
+  y ~ x + cv, data = sim, treat = "x",
+  benchmark_covariates = "cv", kd = c(1, 2, 3),
+  reps = 1000, seed = 77, cluster = "cid",
+  progress = FALSE
+)
+out_cl
+```
+
+## Grouped benchmarks
+
+When the benchmark for the hypothetical confounder should reflect the *joint*
+explanatory power of several covariates, use `gbenchmark_covariates`.
+Internally this computes the group partial R² (via
+`sensemakr::group_partial_r2`) and applies the proper nonlinear kd-scaling:
+
+```{r grouped, eval = FALSE}
+out_g <- bootmakr(
+  lg_ceopay ~ owner_ceo + ceo_tenure + PA_nic3_med + ceo_edu_dummy +
+    lg_sales + firm_age + promoters_pct + institutions_pct + year + nic,
+  data    = ceo_data,
+  treat   = "owner_ceo",
+  gbenchmark_covariates = c("ceo_tenure", "ceo_edu_dummy"),
+  kd      = seq(0.1, 0.5, by = 0.1),
+  reps    = 10000,
+  cluster = "firm_id",
+  seed    = 912323
+)
+plot(out_g, type = "kd_sweep")
+```
+
+## Convergence diagnostics
+
+Large-sample bootstrap inference depends on using enough replications. Pass
+`converge = TRUE` (or a list with fine-grained control) to assess whether SEs
+and *p*-values have stabilised:
+
+```{r convergence, fig.height = 7}
+out_conv <- bootmakr(
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar + pastvoted,
+  data    = darfur,
+  treat   = "directlyharmed",
+  benchmark_covariates = "age",
+  kd      = 1,
+  reps    = 2000,
+  seed    = 42,
+  converge = list(minreps = 200, stepsize = 200, threshold = 1500),
+  progress = FALSE
+)
+out_conv
+plot(out_conv, type = "convergence")
+```
+
+## Accessing the raw bootstrap draws
+
+All bootstrap replicates are stored in the returned object, so there is no
+need to re-run the analysis to inspect the distribution:
+
+```{r draws}
+draws <- out$boot_samples[, 1]          # vector of B adjusted estimates
+draws <- draws[is.finite(draws)]
+
+# Percentiles, moments, etc.
+quantile(draws, c(0.025, 0.5, 0.975))
+
+# Or export for further analysis
+# write.csv(data.frame(adjusted_estimate = draws), "boot_draws.csv")
+```
+
+## Key arguments
+
+| Argument | Description |
+|---|---|
+| `formula`, `data`, `treat` | Standard OLS specification and treatment name |
+| `benchmark_covariates` | Individual benchmark covariate(s) |
+| `gbenchmark_covariates` | Grouped benchmark covariates (joint partial R²) |
+| `kd`, `ky` | Benchmark strength multipliers (`ky` defaults to `kd`) |
+| `reps`, `seed` | Number of bootstrap replications and random seed |
+| `cluster`, `strata` | Cluster and/or strata identifiers |
+| `alpha` | Significance level (default 0.05) |
+| `converge` | `TRUE`, `FALSE`, or `list(minreps, stepsize, threshold)` |
+| `progress` | Show a progress bar (default `TRUE`) |
+
+## Methods
+
+| Method | Description |
+|---|---|
+| `print(x)` | Coefficient table with bootstrap SEs, CIs, and *p*-values |
+| `plot(x, type = "kd_sweep")` | Coefficient plot across kd values |
+| `plot(x, type = "histogram")` | Bootstrap distribution histogram |
+| `plot(x, type = "convergence")` | Three-panel convergence diagnostic plot |
+| `plot(x)` | Auto-selects the most informative plot |
+
+## References
+Cinelli, C. and Hazlett, C. (2020). Making Sense of Sensitivity: Extending
+Omitted Variable Bias. *Journal of the Royal Statistical Society, Series B
+(Statistical Methodology)*, 82(1), 39–67.
+
+## License
+
+MIT
