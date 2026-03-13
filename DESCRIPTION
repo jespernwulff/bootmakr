@@ -18,3 +18,5 @@ Imports:
     utils
 Suggests:
     testthat (>= 3.0.0)
+URL: https://github.com/jespernwulff/bootmakr
+BugReports: https://github.com/jespernwulff/bootmakr/issues
