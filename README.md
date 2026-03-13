@@ -31,8 +31,8 @@ so the CIs and *p*-values are robust to these complications.
 ## Installation
 
 ``` r
-# Install from GitHub (once published):
-# devtools::install_github("username/bootmakr")
+# Install from GitHub:
+devtools::install_github("username/bootmakr")
 ```
 
 ## Quick start

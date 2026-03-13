@@ -41,9 +41,9 @@ these complications.
 
 ## Installation
 
-```r
-# Install from GitHub (once published):
-# devtools::install_github("username/bootmakr")
+``` r
+# Install from GitHub:
+devtools::install_github("username/bootmakr")
 ```
 
 ## Quick start
