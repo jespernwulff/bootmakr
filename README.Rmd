@@ -41,9 +41,9 @@ these complications.
 
 ## Installation
 
-``` r
-# Install from GitHub:
-devtools::install_github("username/bootmakr")
+```r
+# Install from GitHub (once published):
+# devtools::install_github("username/bootmakr")
 ```
 
 ## Quick start
@@ -63,21 +63,21 @@ out <- bootmakr(
   treat   = "directlyharmed",
   benchmark_covariates = "female",
   kd      = 1,
-  reps    = 500,
+  reps    = 5000,
   seed    = 42
 )
 out
 ```
 
-    #> Bootstrapping (500 reps)
+    #> Bootstrapping (5,000 reps)
     #> |==================================================| 100%
     #>
-    #> Bootstrap sensitivity analysis (500 reps, n = 1,276)
+    #> Bootstrap sensitivity analysis (5,000 reps, n = 1,276)
     #> Benchmark: female | kd = 1, ky = 1
     #>
     #> Adjusted estimates (percentile 95% CI):
     #>                Estimate Std. Err     2.5%    97.5% Pr(>|0|)
-    #> directlyharmed 0.075220 0.026589 0.014209 0.119091    0.012 *
+    #> directlyharmed 0.075220 0.027206 0.014938 0.122953   0.0112 *
     #> ---
     #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     #> (H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)
@@ -96,22 +96,25 @@ out_sweep <- bootmakr(
   data    = darfur,
   treat   = "directlyharmed",
   benchmark_covariates = "female",
-  kd      = 1:3,
-  reps    = 500,
+  kd      = seq(0.5, 3, by = 0.5),
+  reps    = 5000,
   seed    = 42
 )
 out_sweep
 plot(out_sweep, type = "kd_sweep")
 ```
 
-    #> Bootstrap sensitivity analysis (500 reps, n = 1,276)
-    #> Benchmark: female | kd = 1 2 3, ky = 1 2 3
+    #> Bootstrap sensitivity analysis (5,000 reps, n = 1,276)
+    #> Benchmark: female | kd = 0.5 1 1.5 2 2.5 3, ky = 0.5 1 1.5 2 2.5 3
     #>
     #> Adjusted estimates (percentile 95% CI):
-    #>                       Estimate Std. Err      2.5%    97.5% Pr(>|0|)
-    #> directlyharmed (kd=1) 0.075220 0.026589  0.014209 0.119091    0.012 *
-    #> directlyharmed (kd=2) 0.052915 0.031626 -0.025391 0.098804     0.18
-    #> directlyharmed (kd=3) 0.030396 0.038848 -0.062536 0.083173    0.656
+    #>                         Estimate Std. Err      2.5%    97.5% Pr(>|0|)
+    #> directlyharmed (kd=0.5) 0.086294 0.025604  0.031655 0.132553   0.0016 **
+    #> directlyharmed (kd=1)   0.075220 0.027206  0.014938 0.122953   0.0112  *
+    #> directlyharmed (kd=1.5) 0.064094 0.029564 -0.002553 0.113414    0.058  .
+    #> directlyharmed (kd=2)   0.052915 0.032561 -0.022221 0.106317    0.173
+    #> directlyharmed (kd=2.5) 0.041683 0.036082 -0.041974 0.100148    0.364
+    #> directlyharmed (kd=3)   0.030396 0.040035 -0.063738 0.094930    0.616
 
 ![](man/figures/README-kd-sweep-1.png)
 
@@ -127,8 +130,8 @@ out_cl <- bootmakr(
   data    = darfur,
   treat   = "directlyharmed",
   benchmark_covariates = "female",
-  kd      = 1:3,
-  reps    = 500,
+  kd      = seq(0.5, 3, by = 0.5),
+  reps    = 5000,
   seed    = 42,
   cluster = "village"
 )
@@ -136,14 +139,17 @@ out_cl
 plot(out_cl, type = "kd_sweep")
 ```
 
-    #> Bootstrap sensitivity analysis (500 reps, n = 1,276, 486 clusters)
-    #> Benchmark: female | kd = 1 2 3, ky = 1 2 3
+    #> Bootstrap sensitivity analysis (5,000 reps, n = 1,276, 486 clusters)
+    #> Benchmark: female | kd = 0.5 1 1.5 2 2.5 3, ky = 0.5 1 1.5 2 2.5 3
     #>
     #> Adjusted estimates (percentile 95% CI):
-    #>                       Estimate Std. Err      2.5%    97.5% Pr(>|0|)
-    #> directlyharmed (kd=1) 0.075220 0.025932  0.022021 0.125235    0.004 **
-    #> directlyharmed (kd=2) 0.052915 0.033005 -0.015680 0.114647     0.12
-    #> directlyharmed (kd=3) 0.030396 0.043038 -0.062151 0.110465    0.452
+    #>                         Estimate Std. Err      2.5%    97.5% Pr(>|0|)
+    #> directlyharmed (kd=0.5) 0.086294 0.024201  0.038727 0.135706    8e-04 ***
+    #> directlyharmed (kd=1)   0.075220 0.025742  0.024539 0.126549   0.0044  **
+    #> directlyharmed (kd=1.5) 0.064094 0.028536  0.007804 0.120179   0.0312   *
+    #> directlyharmed (kd=2)   0.052915 0.032326 -0.011627 0.115624    0.112
+    #> directlyharmed (kd=2.5) 0.041683 0.036870 -0.033500 0.111910    0.262
+    #> directlyharmed (kd=3)   0.030396 0.041984 -0.058243 0.108181    0.456
 
 ![](man/figures/README-cluster-1.png)
 
@@ -156,18 +162,33 @@ Internally this computes the group partial R² (via
 
 ```r
 out_g <- bootmakr(
-  lg_ceopay ~ owner_ceo + ceo_tenure + PA_nic3_med + ceo_edu_dummy +
-    lg_sales + firm_age + promoters_pct + institutions_pct + year + nic,
-  data    = ceo_data,
-  treat   = "owner_ceo",
-  gbenchmark_covariates = c("ceo_tenure", "ceo_edu_dummy"),
-  kd      = seq(0.1, 0.5, by = 0.1),
-  reps    = 500,
-  cluster = "firm_id",
-  seed    = 912323
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+    pastvoted + hhsize_darfur + female + village,
+  data    = darfur,
+  treat   = "directlyharmed",
+  gbenchmark_covariates = c("female", "pastvoted"),
+  kd      = seq(0.5, 3, by = 0.5),
+  reps    = 5000,
+  seed    = 42,
+  cluster = "village"
 )
+out_g
 plot(out_g, type = "kd_sweep")
 ```
+
+    #> Bootstrap sensitivity analysis (5,000 reps, n = 1,276, 486 clusters)
+    #> Benchmark: female, pastvoted | kd = 0.5 1 1.5 2 2.5 3, ky = 0.5 1 1.5 2 2.5 3
+    #>
+    #> Adjusted estimates (percentile 95% CI):
+    #>                         Estimate Std. Err      2.5%    97.5% Pr(>|0|)
+    #> directlyharmed (kd=0.5) 0.085241 0.024102  0.036624 0.132391   0.0016 **
+    #> directlyharmed (kd=1)   0.073102 0.025333  0.020399 0.120879   0.0064 **
+    #> directlyharmed (kd=1.5) 0.060900 0.027677  0.001730 0.110959   0.0448  *
+    #> directlyharmed (kd=2)   0.048633 0.030954 -0.020264 0.102212    0.158
+    #> directlyharmed (kd=2.5) 0.036301 0.034971 -0.042703 0.095262    0.368
+    #> directlyharmed (kd=3)   0.023903 0.039569 -0.066144 0.089045    0.629
+
+![](man/figures/README-gbenchmark-1.png)
 
 ## Convergence diagnostics
 
@@ -183,28 +204,28 @@ out_conv <- bootmakr(
   treat   = "directlyharmed",
   benchmark_covariates = "female",
   kd      = 1,
-  reps    = 1000,
+  reps    = 5000,
   seed    = 42,
   cluster = "village",
-  converge = list(minreps = 100, stepsize = 100, threshold = 750)
+  converge = list(minreps = 500, stepsize = 500, threshold = 3000)
 )
 out_conv
 plot(out_conv, type = "convergence")
 ```
 
-    #> Bootstrap sensitivity analysis (1,000 reps, n = 1,276, 486 clusters)
+    #> Bootstrap sensitivity analysis (5,000 reps, n = 1,276, 486 clusters)
     #> Benchmark: female | kd = 1, ky = 1
     #>
     #> Adjusted estimates (percentile 95% CI):
     #>                Estimate Std. Err     2.5%    97.5% Pr(>|0|)
-    #> directlyharmed 0.075220 0.025740 0.021085 0.125726    0.006 **
+    #> directlyharmed 0.075220 0.025742 0.024539 0.126549   0.0044 **
     #> ---
     #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     #>
-    #> Convergence diagnostics (reps 100 to 1000 by 100, threshold = 750):
-    #>              Mean  Range  CV % Range (>=750) CV% (>=750)
-    #> Std. error 0.0265 0.0020  2.81        0.0003        0.52
-    #> P-value    0.0025 0.0067 99.83        0.0042       44.27
+    #> Convergence diagnostics (reps 500 to 5000 by 500, threshold = 3000):
+    #>              Mean  Range  CV % Range (>=3000) CV% (>=3000)
+    #> Std. error 0.0257 0.0004  0.46         0.0002         0.34
+    #> P-value    0.0043 0.0026 18.83         0.0010        10.40
 
 ![](man/figures/README-convergence-1.png)
 
@@ -214,15 +235,14 @@ All bootstrap replicates are stored in the returned object, so there is no
 need to re-run the analysis to inspect the distribution:
 
 ```r
-draws <- out_cl$boot_samples[, 1]      # vector of B adjusted estimates
+draws <- out_cl$boot_samples[, 1]
 draws <- draws[is.finite(draws)]
 
-# Percentiles, moments, etc.
 quantile(draws, c(0.025, 0.5, 0.975))
 ```
 
     #>       2.5%        50%      97.5%
-    #> 0.02202123 0.07639723 0.12523541
+    #> 0.03872706 0.08592536 0.13570596
 
 ```r
 # Or export for further analysis
