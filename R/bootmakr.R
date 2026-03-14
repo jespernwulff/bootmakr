@@ -330,24 +330,24 @@ bootmakr <- function(formula,
 
 .resample_once <- function(info) {
   switch(info$type,
-         simple  = sample.int(info$n, replace = TRUE),
-         cluster = {
-           sampled <- sample(info$cluster_ids, length(info$cluster_ids), replace = TRUE)
-           unlist(info$row_idx[as.character(sampled)], use.names = FALSE)
-         },
-         strata  = {
-           idx <- integer(0)
-           for (s_idx in info$idx_by_strata) idx <- c(idx, sample(s_idx, length(s_idx), replace = TRUE))
-           idx
-         },
-         strat_cluster = {
-           idx <- integer(0)
-           for (cs in info$clust_by_strata) {
-             sampled <- sample(cs$cluster_ids, length(cs$cluster_ids), replace = TRUE)
-             idx <- c(idx, unlist(cs$row_idx[as.character(sampled)], use.names = FALSE))
-           }
-           idx
-         }
+    simple  = sample.int(info$n, replace = TRUE),
+    cluster = {
+      sampled <- sample(info$cluster_ids, length(info$cluster_ids), replace = TRUE)
+      unlist(info$row_idx[as.character(sampled)], use.names = FALSE)
+    },
+    strata  = {
+      idx <- integer(0)
+      for (s_idx in info$idx_by_strata) idx <- c(idx, sample(s_idx, length(s_idx), replace = TRUE))
+      idx
+    },
+    strat_cluster = {
+      idx <- integer(0)
+      for (cs in info$clust_by_strata) {
+        sampled <- sample(cs$cluster_ids, length(cs$cluster_ids), replace = TRUE)
+        idx <- c(idx, unlist(cs$row_idx[as.character(sampled)], use.names = FALSE))
+      }
+      idx
+    }
   )
 }
 
@@ -430,9 +430,9 @@ print.bootmakr <- function(x, ...) {
 
   labels <- if (nrow(res) > 1) paste0(x$treat, " (kd=", res$kd, ")") else x$treat
   stars  <- ifelse(res$pvalue < 0.001, "***",
-                   ifelse(res$pvalue < 0.01,  "**",
-                          ifelse(res$pvalue < 0.05,  "*",
-                                 ifelse(res$pvalue < 0.1,   ".", " "))))
+            ifelse(res$pvalue < 0.01,  "**",
+            ifelse(res$pvalue < 0.05,  "*",
+            ifelse(res$pvalue < 0.1,   ".", " "))))
   fmt_p  <- vapply(res$pvalue, function(p)
     if (p == 0) "0" else format.pval(p, digits = 3, eps = 2e-16),
     character(1))
@@ -493,55 +493,62 @@ plot.bootmakr <- function(x, type = c("auto", "kd_sweep", "convergence", "histog
   type <- match.arg(type)
   if (type == "auto") {
     type <- if (!is.null(x$convergence)) "convergence"
-    else if (length(x$kd) > 1) "kd_sweep"
-    else "histogram"
+            else if (length(x$kd) > 1) "kd_sweep"
+            else "histogram"
   }
   switch(type,
-         kd_sweep    = .plot_kd_sweep(x, ...),
-         convergence = .plot_convergence(x, ...),
-         histogram   = .plot_histogram(x, ...)
+    kd_sweep    = .plot_kd_sweep(x, ...),
+    convergence = .plot_convergence(x, ...),
+    histogram   = .plot_histogram(x, ...)
   )
   invisible(x)
 }
 
 .plot_kd_sweep <- function(x, ...) {
   res <- x$results; alpha <- x$alpha
+  old_par <- par(mar = c(5.5, 5, 2, 1.5)); on.exit(par(old_par))
   kr <- diff(range(res$kd)); xlim <- range(res$kd) + c(-0.05, 0.05) * max(kr, 1)
   ylim <- range(c(res$ci_lower, res$ci_upper), na.rm = TRUE)
   ylim <- ylim + c(-0.1, 0.1) * diff(ylim)
   plot(res$kd, res$estimate, type = "n", xlim = xlim, ylim = ylim,
-       xlab = sprintf("Benchmark strength (%s)", x$bench_label),
-       ylab = sprintf("Adjusted Treatment Effect (%s)", x$treat))
+       xlab = sprintf("Benchmark strength (kd x %s)", x$bench_label),
+       ylab = "Adjusted Treatment Effect",
+       las = 1, cex.lab = 1.1)
   abline(h = 0, col = "gray60", lty = 2)
-  segments(res$kd, res$ci_lower, res$kd, res$ci_upper, col = "navy", lwd = 2)
+  segments(res$kd, res$ci_lower, res$kd, res$ci_upper, col = "navy", lwd = 2.5)
   sig <- res$pvalue < alpha
-  points(res$kd[sig],  res$estimate[sig],  pch = 16, col = "navy", cex = 1.5)
-  points(res$kd[!sig], res$estimate[!sig], pch = 1,  col = "navy", cex = 1.5)
-  mtext(sprintf("Note: %d%% CI from %d bootstrap reps. Solid = p < %.2f",
-                round((1 - alpha) * 100), x$N_reps, alpha),
-        side = 1, line = 4, cex = 0.7)
+  points(res$kd[sig],  res$estimate[sig],  pch = 16, col = "navy", cex = 1.6)
+  points(res$kd[!sig], res$estimate[!sig], pch = 1,  col = "navy", cex = 1.6)
+  mtext(sprintf("Note: %d%% CI from %s bootstrap reps. Solid = p < %.2f",
+                round((1 - alpha) * 100),
+                formatC(x$N_reps, big.mark = ","), alpha),
+        side = 1, line = 4, cex = 0.75)
 }
 
 .plot_convergence <- function(x, ...) {
   if (is.null(x$convergence)) { message("No convergence data."); return(invisible(x)) }
   conv <- x$convergence; obs <- conv$obs_estimate
-  old_par <- par(mfrow = c(3, 1), mar = c(4, 4, 2, 1)); on.exit(par(old_par))
+  old_par <- par(mfrow = c(3, 1), mar = c(4.5, 5, 2.5, 1.5)); on.exit(par(old_par))
   hist(conv$boot_vals, breaks = 40, col = adjustcolor("navy", 0.3),
-       border = "navy", main = "Bootstrap Distribution", xlab = "", ylab = "")
+       border = "navy", main = "Bootstrap Distribution",
+       xlab = "", ylab = "Frequency", las = 1, cex.lab = 1.1)
   abline(v = obs, lty = 2, lwd = 2)
   plot(conv$data$reps, conv$data$se, type = "b", pch = 16, col = "navy",
-       xlab = "", ylab = "Standard Error", main = "SE Convergence")
+       xlab = "", ylab = "Standard Error", main = "SE Convergence",
+       las = 1, cex.lab = 1.1)
   plot(conv$data$reps, conv$data$pvalue, type = "b", pch = 16, col = "maroon",
        xlab = "Number of Bootstrap Replications", ylab = "Two-sided P-value",
-       main = "P-value Convergence")
+       main = "P-value Convergence", las = 1, cex.lab = 1.1)
 }
 
 .plot_histogram <- function(x, kd_idx = 1, ...) {
   vals <- x$boot_samples[, kd_idx]; vals <- vals[is.finite(vals)]
   obs <- x$results$estimate[kd_idx]
+  old_par <- par(mar = c(5, 5, 3, 1.5)); on.exit(par(old_par))
   hist(vals, breaks = 40, col = adjustcolor("navy", 0.3), border = "navy",
        main = sprintf("Bootstrap Distribution (kd = %s)", x$kd[kd_idx]),
-       xlab = sprintf("Adjusted Estimate (%s)", x$treat), ylab = "Frequency")
+       xlab = "Adjusted Estimate", ylab = "Frequency",
+       las = 1, cex.lab = 1.1)
   abline(v = obs, lty = 2, lwd = 2)
   legend("topright", "Original estimate", lty = 2, lwd = 2, bty = "n")
 }
