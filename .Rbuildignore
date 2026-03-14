@@ -6,3 +6,4 @@
 ^chen_replication\.R$
 ^demo_bootmakr\.R$
 ^Figure.*\.pdf$
+^generate_readme_results
