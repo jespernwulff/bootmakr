@@ -528,16 +528,16 @@ plot.bootmakr <- function(x, type = c("auto", "kd_sweep", "convergence", "histog
 .plot_convergence <- function(x, ...) {
   if (is.null(x$convergence)) { message("No convergence data."); return(invisible(x)) }
   conv <- x$convergence; obs <- conv$obs_estimate
-  old_par <- par(mfrow = c(3, 1), mar = c(4.5, 5, 2.5, 1.5)); on.exit(par(old_par))
+  old_par <- par(mfrow = c(3, 1), mar = c(4.5, 4, 2.5, 1.5)); on.exit(par(old_par))
   hist(conv$boot_vals, breaks = 40, col = adjustcolor("navy", 0.3),
        border = "navy", main = "Bootstrap Distribution",
-       xlab = "", ylab = "Frequency", las = 1, cex.lab = 1.1)
+       xlab = "", ylab = "", las = 1, cex.lab = 1.1)
   abline(v = obs, lty = 2, lwd = 2)
   plot(conv$data$reps, conv$data$se, type = "b", pch = 16, col = "navy",
-       xlab = "", ylab = "Standard Error", main = "SE Convergence",
+       xlab = "", ylab = "", main = "SE Convergence",
        las = 1, cex.lab = 1.1)
   plot(conv$data$reps, conv$data$pvalue, type = "b", pch = 16, col = "maroon",
-       xlab = "Number of Bootstrap Replications", ylab = "Two-sided P-value",
+       xlab = "Number of Bootstrap Replications", ylab = "",
        main = "P-value Convergence", las = 1, cex.lab = 1.1)
 }
 
