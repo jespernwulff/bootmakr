@@ -531,7 +531,7 @@ plot.bootmakr <- function(x, type = c("auto", "kd_sweep", "convergence", "histog
   old_par <- par(mfrow = c(3, 1), mar = c(4.5, 4, 2.5, 1.5)); on.exit(par(old_par))
   hist(conv$boot_vals, breaks = 40, col = adjustcolor("navy", 0.3),
        border = "navy", main = "Bootstrap Distribution",
-       xlab = "", ylab = "", las = 1, cex.lab = 1.1)
+       xlab = "", ylab = "", yaxt = "n", las = 1, cex.lab = 1.1)
   abline(v = obs, lty = 2, lwd = 2)
   plot(conv$data$reps, conv$data$se, type = "b", pch = 16, col = "navy",
        xlab = "", ylab = "", main = "SE Convergence",
@@ -544,10 +544,10 @@ plot.bootmakr <- function(x, type = c("auto", "kd_sweep", "convergence", "histog
 .plot_histogram <- function(x, kd_idx = 1, ...) {
   vals <- x$boot_samples[, kd_idx]; vals <- vals[is.finite(vals)]
   obs <- x$results$estimate[kd_idx]
-  old_par <- par(mar = c(5, 5, 3, 1.5)); on.exit(par(old_par))
+  old_par <- par(mar = c(5, 2, 3, 1.5)); on.exit(par(old_par))
   hist(vals, breaks = 40, col = adjustcolor("navy", 0.3), border = "navy",
        main = sprintf("Bootstrap Distribution (kd = %s)", x$kd[kd_idx]),
-       xlab = "Adjusted Estimate", ylab = "Frequency",
+       xlab = "Adjusted Estimate", ylab = "", yaxt = "n",
        las = 1, cex.lab = 1.1)
   abline(v = obs, lty = 2, lwd = 2)
   legend("topright", "Original estimate", lty = 2, lwd = 2, bty = "n")
