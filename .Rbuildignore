@@ -7,3 +7,9 @@
 ^demo_bootmakr\.R$
 ^Figure.*\.pdf$
 ^generate_readme_results
+^CLAUDE\.md$
+^REPO_NOTES\.md$
+^legacy$
+^\.tmp_.*$
+^\.claude$
+^\.git$

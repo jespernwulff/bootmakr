@@ -145,6 +145,59 @@ plot(out_cl, type = "kd_sweep")
 
 ![](man/figures/README-cluster-1.png)
 
+## Two-way cluster bootstrap
+
+When errors are correlated along **two** non-nested dimensions (e.g. firms
+and years, or villages and survey waves), pass a length-two `cluster`
+vector. `bootmakr` then runs the Cameron, Gelbach & Miller (2011)
+subtractive variance estimator: three sub-bootstraps (one resampling each
+dimension, one resampling their intersection) combined as
+`V = V_G + V_H − V_{G∩H}`. Because the result is a variance rather than a
+bootstrap distribution, the CI and *p*-value use a normal approximation
+(`estimate ± z·SE`) instead of the percentile method:
+
+``` r
+out_2w <- bootmakr(
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+    pastvoted + hhsize_darfur + female + village,
+  data    = darfur,
+  treat   = "directlyharmed",
+  benchmark_covariates = "female",
+  kd      = 1,
+  reps    = 5000,
+  seed    = 42,
+  cluster = c("village", "female")
+)
+out_2w
+```
+
+    #> Bootstrap sensitivity analysis (5,000 reps per dimension, n = 1,276,
+    #>   two-way clusters: village=486, female=2, intersection=576)
+    #> Benchmark: female | kd = 1, ky = 1
+    #>
+    #> Adjusted estimates (normal-approx 95% CI):
+    #>                Estimate Std. Err     2.5%    97.5% Pr(>|0|)
+    #> directlyharmed 0.075220 0.025742 0.024766 0.125674  0.00348 **
+    #> ---
+    #> (H0: adjusted estimate = 0; SE = sqrt(V_G + V_H - V_GH),
+    #>  CI = est +/- z*SE, p = 2*(1 - Phi(|z|)))
+
+Notes:
+
+- `reps` counts the iterations **per** sub-bootstrap, so total work is
+  `3 * reps` fits.
+- If `V_G + V_H − V_GH` comes out negative (possible in small samples),
+  the SE falls back to `sqrt(max(V_G, V_H))` and a warning is emitted.
+- The package emits a soft warning when either cluster dimension has
+  fewer than 10 unique values — the rule of thumb for cluster-robust
+  inference is roughly 30+ clusters per dimension. The Darfur example
+  above with `female` (2 levels) is illustrative of the API only; for
+  serious work, pick dimensions with many distinct clusters in each.
+- Two-way clustering is **not** combined with `strata` (errors with a
+  clear message).
+- The per-dimension bootstrap matrices are available as
+  `out_2w$boot_samples$G`, `$H`, and `$GH`.
+
 ## Grouped benchmarks
 
 When the benchmark for the hypothetical confounder should reflect the
@@ -251,7 +304,8 @@ quantile(draws, c(0.025, 0.5, 0.975))
 | `gbenchmark_covariates` | Grouped benchmark covariates (joint partial R²) |
 | `kd`, `ky` | Benchmark strength multipliers (`ky` defaults to `kd`) |
 | `reps`, `seed` | Number of bootstrap replications and random seed |
-| `cluster`, `strata` | Cluster and/or strata identifiers |
+| `cluster` | Cluster identifier(s). Length 1 → one-way cluster bootstrap with percentile CIs. Length 2 (e.g. `c("firm", "year")`) → two-way CGM bootstrap with normal-approx CIs |
+| `strata` | Stratification identifier (not combined with two-way clustering) |
 | `alpha` | Significance level (default 0.05) |
 | `converge` | `TRUE`, `FALSE`, or `list(minreps, stepsize, threshold)` |
 | `progress` | Show a progress bar (default `TRUE`) |
