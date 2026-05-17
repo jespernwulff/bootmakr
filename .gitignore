@@ -4,3 +4,10 @@
 .httr-oauth
 .DS_Store
 .quarto
+
+# Claude / local-only docs and scratch
+CLAUDE.md
+REPO_NOTES.md
+legacy/
+.tmp_*
+.claude/

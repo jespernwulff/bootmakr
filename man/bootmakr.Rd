@@ -58,7 +58,17 @@ Uses \code{group_partial_r2} to compute joint R2 values.}
 
 \item{seed}{Integer or NULL.}
 
-\item{cluster, strata, weights}{Column name or vector.}
+\item{cluster}{Column name(s) or vector for the cluster bootstrap.
+Length 1 (e.g. \code{"firm"}) gives a one-way cluster bootstrap with
+percentile CIs. Length 2 (e.g. \code{c("firm", "year")}) triggers a
+two-way cluster bootstrap using the Cameron, Gelbach & Miller (2011)
+subtractive variance estimator: three bootstraps are run (on each
+dimension and on their intersection) and combined as
+\code{V = V_G + V_H - V_(G n H)}. CIs and p-values for the two-way case
+use a normal approximation \code{estimate +/- z * SE}. Two-way clustering
+is incompatible with \code{strata}.}
+
+\item{strata, weights}{Column name or vector.}
 
 \item{progress}{Logical: show a progress bar (default TRUE).}
 

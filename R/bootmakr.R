@@ -18,7 +18,16 @@
 #' @param bounds_row Integer: which row of bounds table (default 1).
 #' @param reps Integer: bootstrap replications (default 1000).
 #' @param seed Integer or NULL.
-#' @param cluster,strata,weights Column name or vector.
+#' @param cluster Column name(s) or vector for the cluster bootstrap.
+#'   Length 1 (e.g. \code{"firm"}) gives a one-way cluster bootstrap with
+#'   percentile CIs. Length 2 (e.g. \code{c("firm", "year")}) triggers a
+#'   two-way cluster bootstrap using the Cameron, Gelbach & Miller (2011)
+#'   subtractive variance estimator: three bootstraps are run (on each
+#'   dimension and on their intersection) and combined as
+#'   \code{V = V_G + V_H - V_(G n H)}. CIs and p-values for the two-way case
+#'   use a normal approximation \code{estimate +/- z * SE}. Two-way clustering
+#'   is incompatible with \code{strata}.
+#' @param strata,weights Column name or vector.
 #' @param dots Deprecated; use \code{progress} instead.
 #' @param progress Logical: show a progress bar (default TRUE).
 #' @param converge TRUE, FALSE, or list(minreps, stepsize, threshold).
@@ -28,7 +37,7 @@
 #' @importFrom sensemakr sensemakr group_partial_r2 ovb_partial_r2_bound adjusted_estimate
 #' @importFrom grDevices adjustcolor
 #' @importFrom graphics abline hist legend mtext par plot points segments
-#' @importFrom stats complete.cases lm nobs quantile reformulate sd terms
+#' @importFrom stats complete.cases lm nobs pnorm qnorm quantile reformulate sd terms var
 #' @importFrom utils setTxtProgressBar txtProgressBar
 #'
 #' @export
@@ -79,9 +88,13 @@ bootmakr <- function(formula,
   }
 
   # Resolve cluster / strata / weights
-  cluster_vec <- .resolve_var(cluster, data, "cluster")
-  strata_vec  <- .resolve_var(strata, data, "strata")
-  weight_vec  <- .resolve_var(weights, data, "weights")
+  cluster_list  <- .resolve_cluster(cluster, data)
+  strata_vec    <- .resolve_var(strata, data, "strata")
+  weight_vec    <- .resolve_var(weights, data, "weights")
+  n_cluster_dims <- if (is.null(cluster_list)) 0L else length(cluster_list)
+  is_twoway     <- n_cluster_dims == 2L
+  if (is_twoway && !is.null(strata_vec))
+    stop("`strata` is not supported with two-way clustering.")
 
   conv_opts <- .parse_converge(converge, reps)
   if (!is.null(seed)) set.seed(seed)
@@ -108,65 +121,91 @@ bootmakr <- function(formula,
   )
 
   # ---- Set up resampling ----
-  resample_info <- .setup_resampling(data, cluster_vec, strata_vec)
-
-  # ---- Bootstrap loop ----
-  boot_mat <- matrix(NA_real_, nrow = reps, ncol = n_kd)
-  colnames(boot_mat) <- paste0("kd_", kd)
-  n_fail <- 0L
-
-  # Progress bar
-  show_progress <- isTRUE(progress)
-  if (show_progress) {
-    clust_msg <- if (!is.null(resample_info$n_clust))
-      sprintf(", %d clusters", resample_info$n_clust) else ""
-    cat(sprintf("Bootstrapping (%s reps%s)\n", formatC(reps, big.mark = ","), clust_msg))
-    pb <- txtProgressBar(min = 0, max = reps, style = 3, width = 50)
+  if (is_twoway) {
+    intersection_vec <- paste(cluster_list[[1]], cluster_list[[2]], sep = "_._")
+    resample_info_G  <- .setup_resampling(data, cluster_list[[1]],  NULL)
+    resample_info_H  <- .setup_resampling(data, cluster_list[[2]],  NULL)
+    resample_info_GH <- .setup_resampling(data, intersection_vec,   NULL)
+    .warn_few_clusters(resample_info_G$n_clust,
+                       if (is.character(cluster)) cluster[1] else "dim 1")
+    .warn_few_clusters(resample_info_H$n_clust,
+                       if (is.character(cluster)) cluster[2] else "dim 2")
+  } else {
+    single_clust  <- if (n_cluster_dims == 1L) cluster_list[[1]] else NULL
+    resample_info <- .setup_resampling(data, single_clust, strata_vec)
   }
 
-  for (b in seq_len(reps)) {
-    if (show_progress) setTxtProgressBar(pb, b)
+  # ---- Bootstrap loop(s) ----
+  loop_args <- list(
+    reps = reps, data = data, formula = formula, treat = treat,
+    weight_vec = weight_vec,
+    benchmark_covariates = benchmark_covariates,
+    gbenchmark_covariates = gbenchmark_covariates,
+    kd = kd, ky = ky, q = q, alpha = alpha,
+    r2dz.x = r2dz.x, r2yz.dx = r2yz.dx,
+    bound_label = bound_label, reduce = reduce, bounds_row = bounds_row,
+    show_progress = isTRUE(progress)
+  )
 
-    boot_idx <- .resample_once(resample_info)
-    d_boot   <- data[boot_idx, , drop = FALSE]
+  if (is_twoway) {
+    nm1 <- if (is.character(cluster)) cluster[1] else "dim 1"
+    nm2 <- if (is.character(cluster)) cluster[2] else "dim 2"
+    out_G  <- do.call(.run_bootstrap_loop,
+                      c(list(resample_info = resample_info_G,
+                             label = sprintf("[1/3] cluster: %s", nm1)),
+                        loop_args))
+    out_H  <- do.call(.run_bootstrap_loop,
+                      c(list(resample_info = resample_info_H,
+                             label = sprintf("[2/3] cluster: %s", nm2)),
+                        loop_args))
+    out_GH <- do.call(.run_bootstrap_loop,
+                      c(list(resample_info = resample_info_GH,
+                             label = sprintf("[3/3] intersection (%s x %s)", nm1, nm2)),
+                        loop_args))
 
-    boot_mat[b, ] <- tryCatch({
-      fit_b <- if (is.null(weight_vec)) {
-        lm(formula, data = d_boot)
-      } else {
-        lm(formula, data = d_boot, weights = weight_vec[boot_idx])
-      }
-      .get_adjusted_estimates(
-        fit_b, d_boot, formula, treat, weight_vec[boot_idx],
-        benchmark_covariates, gbenchmark_covariates,
-        kd, ky, q, alpha, r2dz.x, r2yz.dx, bound_label, reduce, bounds_row
-      )
-    }, error = function(e) rep(NA_real_, n_kd))
-
-    if (any(!is.finite(boot_mat[b, ]))) n_fail <- n_fail + 1L
+    boot_samples <- list(G = out_G$boot_mat, H = out_H$boot_mat, GH = out_GH$boot_mat)
+    results      <- .compute_twoway_stats(boot_samples, obs_estimates, kd, alpha)
+    n_fail       <- out_G$n_fail + out_H$n_fail + out_GH$n_fail
+    n_successful <- min(sum(complete.cases(boot_samples$G)),
+                        sum(complete.cases(boot_samples$H)),
+                        sum(complete.cases(boot_samples$GH)))
+    n_clust      <- c(G  = resample_info_G$n_clust,
+                      H  = resample_info_H$n_clust,
+                      GH = resample_info_GH$n_clust)
+    method       <- "cgm_twoway"
+  } else {
+    out <- do.call(.run_bootstrap_loop,
+                   c(list(resample_info = resample_info, label = NULL), loop_args))
+    boot_samples <- out$boot_mat
+    results      <- .compute_boot_stats(boot_samples, obs_estimates, kd, alpha)
+    n_fail       <- out$n_fail
+    n_successful <- sum(complete.cases(boot_samples))
+    n_clust      <- resample_info$n_clust
+    method       <- "percentile"
   }
-  if (show_progress) { close(pb); cat("\n") }
-
-  # ---- Statistics ----
-  results      <- .compute_boot_stats(boot_mat, obs_estimates, kd, alpha)
-  n_successful <- sum(complete.cases(boot_mat))
 
   conv_out <- NULL
   if (conv_opts$do_converge) {
-    conv_out <- .convergence_diagnostics(boot_mat[, 1], obs_estimates[1], conv_opts)
+    conv_out <- if (is_twoway) {
+      .convergence_diagnostics_twoway(boot_samples, obs_estimates[1], alpha, conv_opts)
+    } else {
+      .convergence_diagnostics(boot_samples[, 1], obs_estimates[1], conv_opts)
+    }
   }
 
   structure(
     list(
       results       = results,
-      boot_samples  = boot_mat,
+      boot_samples  = boot_samples,
       convergence   = conv_out,
       call          = cl,
+      method        = method,
       N             = N,
       N_reps        = reps,
       N_successful  = n_successful,
       N_fail        = n_fail,
-      N_clust       = resample_info$n_clust,
+      N_clust       = n_clust,
+      cluster_names = if (is.character(cluster)) cluster else NULL,
       kd            = kd,
       ky            = ky,
       alpha         = alpha,
@@ -283,6 +322,43 @@ bootmakr <- function(formula,
   stop(sprintf("`%s` must be a column name in data or vector of length nrow(data).", label))
 }
 
+# Parse `cluster` into NULL, list(vec) for one-way, or list(vec1, vec2) for two-way.
+.resolve_cluster <- function(cluster, data) {
+  if (is.null(cluster)) return(NULL)
+
+  if (is.character(cluster)) {
+    if (length(cluster) > 2)
+      stop("`cluster` supports at most two dimensions; pass length 1 or 2.")
+    bad <- setdiff(cluster, names(data))
+    if (length(bad))
+      stop(sprintf("Cluster column(s) not found in data: %s",
+                   paste(bad, collapse = ", ")))
+    return(lapply(cluster, function(nm) data[[nm]]))
+  }
+
+  if (is.list(cluster)) {
+    if (length(cluster) > 2)
+      stop("`cluster` supports at most two dimensions.")
+    return(lapply(cluster, function(x) .resolve_var(x, data, "cluster")))
+  }
+
+  if (length(cluster) == nrow(data)) return(list(cluster))
+
+  stop("`cluster` must be NULL, column name(s) (length 1 or 2), a list, ",
+       "or a vector of length nrow(data).")
+}
+
+# Soft warning when a cluster dimension is very small. Cluster-bootstrap
+# inference is unreliable with few clusters (Cameron & Miller 2015 rule of
+# thumb is 30-50+); at < 10 the CGM two-way variance can degenerate (the
+# pathological case is 2: the marginal bootstrap is essentially singular).
+.warn_few_clusters <- function(n_clust, label, threshold = 10L) {
+  if (!is.null(n_clust) && n_clust < threshold)
+    warning(sprintf(
+      "Cluster dimension `%s` has only %d unique value(s). The cluster bootstrap on this dimension may give unreliable SEs (rule of thumb: 30+ clusters; <%d is clearly small).",
+      label, n_clust, threshold), call. = FALSE)
+}
+
 .parse_converge <- function(converge, reps) {
   defaults <- list(do_converge = FALSE, minreps = 500, stepsize = 500,
                    threshold = round(0.75 * reps))
@@ -351,6 +427,51 @@ bootmakr <- function(formula,
   )
 }
 
+# Run one bootstrap loop and return the matrix of adjusted estimates plus
+# the number of failed reps. Used once for one-way / no-cluster, and three
+# times for two-way clustering (G, H, and G x H intersection).
+.run_bootstrap_loop <- function(resample_info, reps, data, formula, treat,
+                                weight_vec, benchmark_covariates,
+                                gbenchmark_covariates, kd, ky, q, alpha,
+                                r2dz.x, r2yz.dx, bound_label, reduce,
+                                bounds_row, show_progress, label = NULL) {
+  n_kd     <- length(kd)
+  boot_mat <- matrix(NA_real_, nrow = reps, ncol = n_kd)
+  colnames(boot_mat) <- paste0("kd_", kd)
+  n_fail   <- 0L
+
+  if (show_progress) {
+    clust_msg <- if (!is.null(resample_info$n_clust))
+      sprintf(", %d clusters", resample_info$n_clust) else ""
+    prefix <- if (!is.null(label)) paste0(label, " ") else ""
+    cat(sprintf("%sBootstrapping (%s reps%s)\n", prefix,
+                formatC(reps, big.mark = ","), clust_msg))
+    pb <- txtProgressBar(min = 0, max = reps, style = 3, width = 50)
+  }
+
+  for (b in seq_len(reps)) {
+    if (show_progress) setTxtProgressBar(pb, b)
+    boot_idx <- .resample_once(resample_info)
+    d_boot   <- data[boot_idx, , drop = FALSE]
+    boot_mat[b, ] <- tryCatch({
+      fit_b <- if (is.null(weight_vec)) {
+        lm(formula, data = d_boot)
+      } else {
+        lm(formula, data = d_boot, weights = weight_vec[boot_idx])
+      }
+      .get_adjusted_estimates(
+        fit_b, d_boot, formula, treat, weight_vec[boot_idx],
+        benchmark_covariates, gbenchmark_covariates,
+        kd, ky, q, alpha, r2dz.x, r2yz.dx, bound_label, reduce, bounds_row
+      )
+    }, error = function(e) rep(NA_real_, n_kd))
+    if (any(!is.finite(boot_mat[b, ]))) n_fail <- n_fail + 1L
+  }
+  if (show_progress) { close(pb); cat("\n") }
+
+  list(boot_mat = boot_mat, n_fail = n_fail)
+}
+
 .compute_boot_stats <- function(boot_mat, obs_estimates, kd, alpha) {
   n_kd   <- length(kd)
   probs  <- c(alpha / 2, 1 - alpha / 2)
@@ -367,6 +488,53 @@ bootmakr <- function(formula,
     results$ci_upper[i] <- unname(ci[2])
     pL <- mean(vals <= 0); pR <- mean(vals >= 0)
     results$pvalue[i] <- 2 * min(pL, pR)
+  }
+  results
+}
+
+# Cameron, Gelbach & Miller (2011) subtractive variance combination for
+# two-way cluster bootstrap. Three marginal bootstraps (G, H, intersection)
+# yield V_2way = Var_G + Var_H - Var_GH. CIs and p-values use a normal
+# approximation since the result is a variance, not a distribution.
+# If V_2way < 0 (possible in small samples) we fall back to
+# max(Var_G, Var_H) with a warning -- a conservative scalar analogue of the
+# eigenvalue truncation used in the multivariate case.
+.compute_twoway_stats <- function(boot_samples, obs_estimates, kd, alpha) {
+  n_kd   <- length(kd)
+  z_crit <- qnorm(1 - alpha / 2)
+  results <- data.frame(kd = kd, estimate = obs_estimates,
+                        se = NA_real_, ci_lower = NA_real_,
+                        ci_upper = NA_real_, pvalue = NA_real_,
+                        var_G = NA_real_, var_H = NA_real_, var_GH = NA_real_,
+                        var_neg_fix = FALSE,
+                        stringsAsFactors = FALSE)
+  for (i in seq_len(n_kd)) {
+    vG  <- boot_samples$G[,  i]; vG  <- vG[is.finite(vG)]
+    vH  <- boot_samples$H[,  i]; vH  <- vH[is.finite(vH)]
+    vGH <- boot_samples$GH[, i]; vGH <- vGH[is.finite(vGH)]
+    if (length(vG) < 10 || length(vH) < 10 || length(vGH) < 10) next
+
+    var_G <- var(vG); var_H <- var(vH); var_GH <- var(vGH)
+    var_2 <- var_G + var_H - var_GH
+
+    if (is.finite(var_2) && var_2 < 0) {
+      warning(sprintf(
+        "Two-way variance estimate negative for kd = %g (V_G + V_H - V_GH = %g). Falling back to max(V_G, V_H) (conservative).",
+        kd[i], var_2), call. = FALSE)
+      var_2 <- max(var_G, var_H)
+      results$var_neg_fix[i] <- TRUE
+    }
+
+    se_2 <- sqrt(var_2)
+    est  <- obs_estimates[i]
+    results$se[i]       <- se_2
+    results$ci_lower[i] <- est - z_crit * se_2
+    results$ci_upper[i] <- est + z_crit * se_2
+    z_stat <- est / se_2
+    results$pvalue[i]   <- 2 * pnorm(-abs(z_stat))
+    results$var_G[i]    <- var_G
+    results$var_H[i]    <- var_H
+    results$var_GH[i]   <- var_GH
   }
   results
 }
@@ -405,6 +573,54 @@ bootmakr <- function(formula,
   )
 }
 
+# Convergence diagnostics for the CGM two-way bootstrap.
+# Tracks the combined SE and normal-approximation p-value at each cumulative
+# rep count using the same V_G + V_H - V_GH formula as the headline result.
+# The intersection bootstrap distribution is exposed as boot_vals so the
+# existing convergence plot can draw a histogram.
+.convergence_diagnostics_twoway <- function(boot_samples, obs_estimate, alpha, opts) {
+  vG  <- boot_samples$G[,  1]
+  vH  <- boot_samples$H[,  1]
+  vGH <- boot_samples$GH[, 1]
+  total    <- min(sum(is.finite(vG)), sum(is.finite(vH)), sum(is.finite(vGH)))
+  reps_seq <- seq(opts$minreps, total, by = opts$stepsize)
+  if (reps_seq[length(reps_seq)] != total) reps_seq <- c(reps_seq, total)
+  conv_df  <- data.frame(reps = reps_seq, se = NA_real_, pvalue = NA_real_)
+  for (j in seq_along(reps_seq)) {
+    n <- reps_seq[j]
+    v_G  <- var(vG[seq_len(n)],  na.rm = TRUE)
+    v_H  <- var(vH[seq_len(n)],  na.rm = TRUE)
+    v_GH <- var(vGH[seq_len(n)], na.rm = TRUE)
+    v2   <- v_G + v_H - v_GH
+    if (!is.finite(v2) || v2 < 0) v2 <- max(v_G, v_H, na.rm = TRUE)
+    se   <- sqrt(v2)
+    conv_df$se[j]     <- se
+    conv_df$pvalue[j] <- 2 * pnorm(-abs(obs_estimate / se))
+  }
+  thr <- opts$threshold; high <- conv_df$reps >= thr
+  se_hi <- if (any(high) && sum(high) > 1) conv_df$se[high] else NA
+  p_hi  <- if (any(high) && sum(high) > 1) conv_df$pvalue[high] else NA
+  .safe_cv <- function(x) { m <- mean(x); if (m == 0) NA_real_ else sd(x) / m * 100 }
+  vGH_clean <- vGH[is.finite(vGH)]
+  list(
+    data = conv_df,
+    summary = list(
+      se_mean = mean(conv_df$se), se_range = diff(range(conv_df$se)),
+      se_cv = .safe_cv(conv_df$se),
+      se_range_hi = if (all(is.na(se_hi))) NA_real_ else diff(range(se_hi)),
+      se_cv_hi    = if (all(is.na(se_hi))) NA_real_ else .safe_cv(se_hi),
+      p_mean = mean(conv_df$pvalue), p_range = diff(range(conv_df$pvalue)),
+      p_cv = .safe_cv(conv_df$pvalue),
+      p_range_hi = if (all(is.na(p_hi))) NA_real_ else diff(range(p_hi)),
+      p_cv_hi    = if (all(is.na(p_hi))) NA_real_ else .safe_cv(p_hi),
+      threshold = thr,
+      boot_mean = mean(vGH_clean), boot_sd = sd(vGH_clean)
+    ),
+    boot_vals = vGH_clean, obs_estimate = obs_estimate, opts = opts,
+    twoway = TRUE
+  )
+}
+
 
 # ==============================================================================
 # Print method
@@ -414,11 +630,24 @@ bootmakr <- function(formula,
 print.bootmakr <- function(x, ...) {
   cat("\nCall:\n"); print(x$call)
 
+  is_twoway <- identical(x$method, "cgm_twoway")
+
   cat(sprintf(
-    "\nBootstrap sensitivity analysis (%s reps, n = %s",
-    formatC(x$N_reps, big.mark = ","), formatC(x$N, big.mark = ",")
+    "\nBootstrap sensitivity analysis (%s reps%s, n = %s",
+    formatC(x$N_reps, big.mark = ","),
+    if (is_twoway) " per dimension" else "",
+    formatC(x$N, big.mark = ",")
   ))
-  if (!is.null(x$N_clust)) cat(sprintf(", %d clusters", x$N_clust))
+  if (!is.null(x$N_clust)) {
+    if (is_twoway) {
+      nm1 <- x$cluster_names[1] %||% "G"
+      nm2 <- x$cluster_names[2] %||% "H"
+      cat(sprintf(", two-way clusters: %s=%d, %s=%d, intersection=%d",
+                  nm1, x$N_clust["G"], nm2, x$N_clust["H"], x$N_clust["GH"]))
+    } else {
+      cat(sprintf(", %d clusters", x$N_clust))
+    }
+  }
   cat(")\n")
 
   cat(sprintf("Benchmark: %s | kd = %s, ky = %s\n",
@@ -434,7 +663,8 @@ print.bootmakr <- function(x, ...) {
             ifelse(res$pvalue < 0.05,  "*",
             ifelse(res$pvalue < 0.1,   ".", " "))))
   fmt_p  <- vapply(res$pvalue, function(p)
-    if (p == 0) "0" else format.pval(p, digits = 3, eps = 2e-16),
+    if (is.na(p)) "NA" else if (p == 0) "0"
+    else format.pval(p, digits = 3, eps = 2e-16),
     character(1))
 
   tab <- data.frame(
@@ -450,14 +680,24 @@ print.bootmakr <- function(x, ...) {
   colnames(tab)[3] <- paste0(alpha / 2 * 100, "%")
   colnames(tab)[4] <- paste0((1 - alpha / 2) * 100, "%")
 
-  cat(sprintf("\nAdjusted estimates (percentile %d%% CI):\n", ci_pct))
+  ci_label <- if (is_twoway) "normal-approx" else "percentile"
+  cat(sprintf("\nAdjusted estimates (%s %d%% CI):\n", ci_label, ci_pct))
   print(tab, right = TRUE, quote = FALSE)
   cat("---\nSignif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n")
-  cat("(H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)\n")
+  if (is_twoway) {
+    cat("(H0: adjusted estimate = 0; SE = sqrt(V_G + V_H - V_GH),",
+        "CI = est +/- z*SE, p = 2*(1 - Phi(|z|)))\n")
+    if (any(res$var_neg_fix, na.rm = TRUE))
+      cat("Note: V_G + V_H - V_GH was negative for one or more rows;",
+          "replaced with max(V_G, V_H) (conservative).\n")
+  } else {
+    cat("(H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)\n")
+  }
 
   if (x$N_fail > 0)
-    cat(sprintf("\nNote: %d of %d replications failed and were dropped.\n",
-                x$N_fail, x$N_reps))
+    cat(sprintf("\nNote: %d of %d replications failed and were dropped%s.\n",
+                x$N_fail, if (is_twoway) 3L * x$N_reps else x$N_reps,
+                if (is_twoway) " (summed across the 3 sub-bootstraps)" else ""))
 
   if (!is.null(x$convergence)) .print_convergence(x$convergence)
   invisible(x)
@@ -542,8 +782,35 @@ plot.bootmakr <- function(x, type = c("auto", "kd_sweep", "convergence", "histog
 }
 
 .plot_histogram <- function(x, kd_idx = 1, ...) {
-  vals <- x$boot_samples[, kd_idx]; vals <- vals[is.finite(vals)]
   obs <- x$results$estimate[kd_idx]
+  is_twoway <- identical(x$method, "cgm_twoway")
+
+  if (is_twoway) {
+    nm1 <- x$cluster_names[1] %||% "G"
+    nm2 <- x$cluster_names[2] %||% "H"
+    panels <- list(
+      list(vals = x$boot_samples$G[,  kd_idx],
+           title = sprintf("Cluster: %s", nm1)),
+      list(vals = x$boot_samples$H[,  kd_idx],
+           title = sprintf("Cluster: %s", nm2)),
+      list(vals = x$boot_samples$GH[, kd_idx],
+           title = sprintf("Intersection: %s x %s", nm1, nm2))
+    )
+    old_par <- par(mfrow = c(3, 1), mar = c(3.5, 2, 2.5, 1.5)); on.exit(par(old_par))
+    for (p in panels) {
+      vals <- p$vals[is.finite(p$vals)]
+      hist(vals, breaks = 40, col = adjustcolor("navy", 0.3), border = "navy",
+           main = p$title, xlab = "Adjusted Estimate",
+           ylab = "", yaxt = "n", las = 1, cex.lab = 1.0)
+      abline(v = obs, lty = 2, lwd = 2)
+    }
+    mtext(sprintf("Two-way CGM bootstrap (kd = %s); dashed = original estimate",
+                  x$kd[kd_idx]),
+          side = 1, line = 2.2, cex = 0.75)
+    return(invisible(NULL))
+  }
+
+  vals <- x$boot_samples[, kd_idx]; vals <- vals[is.finite(vals)]
   old_par <- par(mar = c(5, 2, 3, 1.5)); on.exit(par(old_par))
   hist(vals, breaks = 40, col = adjustcolor("navy", 0.3), border = "navy",
        main = sprintf("Bootstrap Distribution (kd = %s)", x$kd[kd_idx]),
