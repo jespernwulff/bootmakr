@@ -738,7 +738,7 @@ utils::globalVariables(".bootmakr_w")
       sprintf(", %d clusters", resample_info$n_clust) else ""
     prefix <- if (!is.null(label)) paste0(label, " ") else ""
     cat(sprintf("%sBootstrapping (%s reps%s)\n", prefix,
-                formatC(reps, big.mark = ","), clust_msg))
+                formatC(reps, big.mark = ",", format = "d"), clust_msg))
     pb <- txtProgressBar(min = 0, max = reps, style = 3, width = 50)
   }
 
@@ -935,9 +935,9 @@ print.bootmakr <- function(x, ...) {
 
   cat(sprintf(
     "\nBootstrap sensitivity analysis (%s reps%s, n = %s",
-    formatC(x$N_reps, big.mark = ","),
+    formatC(x$N_reps, big.mark = ",", format = "d"),
     if (is_twoway) " per dimension" else "",
-    formatC(x$N, big.mark = ",")
+    formatC(x$N, big.mark = ",", format = "d")
   ))
   if (!is.null(x$N_clust)) {
     if (is_twoway) {
@@ -1088,7 +1088,7 @@ plot.bootmakr <- function(x, type = c("auto", "kd_sweep", "convergence", "histog
   points(res$kd[!sig], res$estimate[!sig], pch = 1,  col = "navy", cex = 1.6)
   mtext(sprintf("Note: %d%% CI from %s bootstrap reps. Solid = p < %.2f",
                 round((1 - alpha) * 100),
-                formatC(x$N_reps, big.mark = ","), alpha),
+                formatC(x$N_reps, big.mark = ",", format = "d"), alpha),
         side = 1, line = 4, cex = 0.75)
 }
 
