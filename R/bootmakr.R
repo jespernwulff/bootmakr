@@ -129,13 +129,14 @@
 #' data("darfur", package = "sensemakr")
 #'
 #' # An omitted variable as strong as `female` (kd = 1, the default);
-#' # villages are resampled as whole clusters.
+#' # villages are resampled as whole clusters. 100 replications keep the
+#' # example quick; use 1,000 or more in practice.
 #' out <- bootmakr(
 #'   peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
 #'     pastvoted + hhsize_darfur + female + village,
 #'   data = darfur, treat = "directlyharmed",
 #'   benchmark_covariates = "female",
-#'   cluster = "village", reps = 200, seed = 1, progress = FALSE
+#'   cluster = "village", reps = 100, seed = 1, progress = FALSE
 #' )
 #' out
 #'

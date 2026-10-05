@@ -11,3 +11,24 @@ REPO_NOTES.md
 legacy/
 .tmp_*
 .claude/
+
+# precompute: Stata's own batch logs start with the licence banner; the logs
+# the articles quote from are in precompute/stata/output/
+precompute/stata/*.log
+precompute/stata/*.launch.txt
+precompute/stata/*.dta
+precompute/cache/
+precompute/data/
+
+# image files that knitr leaves behind when the articles are precomputed
+# (the figures are embedded in the generated .Rmd files)
+vignettes/figures/
+vignettes/articles/figures/
+
+# stray device output of pkgdown's example runs
+docs/reference/Rplot001.png
+
+# temporary copies that pkgdown makes while rendering an article (left behind
+# when a file lock keeps it from removing them)
+vignettes/file*.html
+vignettes/articles/file*.html
