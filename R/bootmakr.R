@@ -208,11 +208,7 @@ bootmakr <- function(formula,
   if (!is.null(seed)) set.seed(seed)
 
   # ---- Fit original model ----
-  fit_orig <- if (is.null(weight_vec)) {
-    lm(formula, data = data)
-  } else {
-    lm(formula, data = data, weights = weight_vec)
-  }
+  fit_orig <- .fit_lm(formula, data, weight_vec)
   N <- nobs(fit_orig)
 
   # ---- Original point estimates ----
@@ -437,11 +433,7 @@ bootmakr <- function(formula,
   rhs_vars     <- attr(terms(formula), "term.labels")
   rhs_no_treat <- setdiff(rhs_vars, treat)
   treat_formula <- reformulate(rhs_no_treat, response = treat)
-  fit_d <- if (is.null(weight_vec)) {
-    lm(treat_formula, data = data)
-  } else {
-    lm(treat_formula, data = data, weights = weight_vec)
-  }
+  fit_d <- .fit_lm(treat_formula, data, weight_vec)
   r2dxj.x <- sensemakr::group_partial_r2(fit_d, covariates = gbenchmark_covariates)
   list(r2dxj.x = unname(r2dxj.x), r2yxj.dx = unname(r2yxj.dx))
 }
@@ -602,6 +594,20 @@ bootmakr <- function(formula,
 # Helpers
 # ==============================================================================
 
+# Fit the OLS regression, with optional weights. lm() evaluates `weights` in
+# `data` and then in the environment of the formula -- not in the function
+# that calls lm() -- so a weights vector held in a local variable is not
+# found there. The vector is therefore placed in a child of the formula's
+# environment, where lm() looks for it.
+.fit_lm <- function(formula, data, weight_vec = NULL) {
+  if (is.null(weight_vec)) return(lm(formula, data = data))
+  env <- new.env(parent = environment(formula))
+  assign(".bootmakr_w", weight_vec, envir = env)
+  environment(formula) <- env
+  lm(formula, data = data, weights = .bootmakr_w)
+}
+utils::globalVariables(".bootmakr_w")
+
 .resolve_var <- function(x, data, label) {
   if (is.null(x)) return(NULL)
   if (is.character(x) && length(x) == 1 && x %in% names(data)) return(data[[x]])
@@ -741,11 +747,7 @@ bootmakr <- function(formula,
     boot_idx <- .resample_once(resample_info)
     d_boot   <- data[boot_idx, , drop = FALSE]
     boot_mat[b, ] <- tryCatch({
-      fit_b <- if (is.null(weight_vec)) {
-        lm(formula, data = d_boot)
-      } else {
-        lm(formula, data = d_boot, weights = weight_vec[boot_idx])
-      }
+      fit_b <- .fit_lm(formula, d_boot, weight_vec[boot_idx])
       .get_adjusted_estimates(
         fit_b, d_boot, formula, treat, weight_vec[boot_idx],
         benchmark_covariates, gbenchmark_covariates,
