@@ -1,8 +1,10 @@
 Package: bootmakr
 Title: Bootstrap Inference for Sensemakr Sensitivity Analysis
 Version: 0.3.0
-Authors@R:
-    person("Jesper N.", "Wulff", email = "jwulff@econ.au.dk", role = c("aut", "cre"))
+Authors@R: c(
+    person("Jesper N.", "Wulff", email = "jwulff@econ.au.dk", role = c("aut", "cre")),
+    person("Sirio", "Lonati", role = "aut")
+  )
 Description: Wraps sensemakr sensitivity analysis in a bootstrap loop to produce
     bootstrap standard errors, confidence intervals, and p-values for adjusted
     treatment effect estimates. Supports multiple kd values, one-way and two-way
