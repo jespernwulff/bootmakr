@@ -237,7 +237,8 @@ If you use `bootmakr`, please cite the paper it accompanies and the method
 it builds on.
 
 Lonati, S., & Wulff, J. N. (2026). *Why you should not use the ITCV with
-robust standard errors (and what to do instead)*. Working paper.
+robust standard errors (and what to do instead)*. SSRN working paper.
+<https://ssrn.com/abstract=6789678>
 
 Cinelli, C., & Hazlett, C. (2020). Making sense of sensitivity: Extending
 omitted variable bias. *Journal of the Royal Statistical Society: Series B*,

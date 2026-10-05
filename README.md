@@ -343,6 +343,7 @@ analysis tools for OLS in R and Stata. *Observational Studies*, 10(2),
 
 Lonati, S. and J. N. Wulff (2026). Why you should not use the ITCV with
 robust standard errors (and what to do instead). *SSRN Working Paper*.
+<https://ssrn.com/abstract=6789678>
 
 ## License
 

@@ -120,7 +120,8 @@
 #' 10(2), 93-127.
 #'
 #' Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
-#' robust standard errors (and what to do instead). Working paper.
+#' robust standard errors (and what to do instead). SSRN working paper.
+#' \url{https://ssrn.com/abstract=6789678}
 #'
 #' @seealso \code{\link{print.bootmakr}}, \code{\link{plot.bootmakr}},
 #'   \code{\link[sensemakr]{sensemakr}}
