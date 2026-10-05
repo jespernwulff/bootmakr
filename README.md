@@ -3,6 +3,7 @@
 
 <!-- badges: start -->
 
+[![R-CMD-check](https://github.com/jespernwulff/bootmakr/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/jespernwulff/bootmakr/actions/workflows/R-CMD-check.yaml)
 [![License:
 MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 <!-- badges: end -->
