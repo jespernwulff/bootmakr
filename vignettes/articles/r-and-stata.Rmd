@@ -1,0 +1,110 @@
+---
+title: "R and Stata side by side"
+description: >
+  The arguments of the R function and the options of the Stata command,
+  matched, with the few places where the two differ.
+---
+
+The R package and the Stata command implement the same procedure and print
+the same quantities. This page matches their arguments, options and results,
+for readers who move between the two or who want to translate an example.
+
+## The same analysis in both
+
+In R:
+
+```r
+out <- bootmakr(y ~ d + x1 + x2, data = dat, treat = "d",
+                benchmark_covariates = "x1", kd = c(0.5, 1, 2),
+                cluster = "firm", reps = 10000, seed = 123)
+out
+plot(out, type = "kd_sweep")
+```
+
+In Stata:
+
+```stata
+bootmakr y d x1 x2, treat(d) benchmark(x1) kd(0.5 1 2) ///
+    cluster(firm) reps(10000) seed(123) plot
+```
+
+Two things differ by design. The point estimates are identical, but the
+bootstrap standard errors, intervals and *p*-values agree only up to
+simulation error, because R and Stata have different random-number
+generators and the same seed does not give the same bootstrap samples. And
+in R the result is an object that you print and plot, whereas in Stata
+options of the command request the plot and the diagnostics.
+
+## Specifying the analysis
+
+| Purpose | R | Stata |
+|---|---|---|
+| Model | `formula = y ~ d + x1 + x2`, `data = dat` | `y d x1 x2` (outcome first) |
+| Treatment | `treat = "d"` | `treat(d)` |
+| Benchmark covariate | `benchmark_covariates = "x1"` | `benchmark(x1)` |
+| Group of covariates as benchmark | `gbenchmark_covariates = c("x1", "x2")` | `gbenchmark(x1 x2)` |
+| Strength relative to the benchmark, treatment side | `kd = 1` (default) | `kd(1)` (default) |
+| Strength relative to the benchmark, outcome side | `ky`; defaults to `kd` | `ky()`; defaults to `kd()` |
+| Several strengths at once | `kd = c(0.5, 1, 2)` | `kd(0.5 1 2)` |
+| Categorical covariates | `factor(year)` in the formula | `i.year` in the variable list |
+| Subsample | subset `data` | `if` and `in` |
+| Regression weights | `weights = "w"` or a vector | not available (`sensemakr` for Stata does not accept weights) |
+| Omitted-variable strength set by hand | `r2dz.x`, `r2yz.dx` | not available |
+
+## The bootstrap
+
+| Purpose | R | Stata |
+|---|---|---|
+| Number of replications | `reps = 1000` (default) | `reps(1000)` (default) |
+| Seed | `seed = 123`; none by default | `seed(123)`; none by default |
+| Resample observations | no `cluster` | no `cluster()` |
+| Resample clusters | `cluster = "firm"` | `cluster(firm)` |
+| Two-way clustering | `cluster = c("firm", "year")` | not available |
+| Stratified bootstrap | `strata = "region"` | `strata(region)` |
+| New cluster identifier in each bootstrap sample | not needed | `idcluster()` |
+| Confidence level | `alpha = 0.05` (default) | `alpha(0.05)` or `level(95)` (default) |
+| Progress display | `progress = TRUE` (default) | `dots(100)`; off by default |
+| Bootstrap your own program | not applicable | `program()` |
+
+## Results, plots and diagnostics
+
+| Purpose | R | Stata |
+|---|---|---|
+| Table of adjusted estimates | `print(out)`, `out$results` | printed; `r(estimate)`, `r(se)`, `r(ci_lower)`, `r(ci_upper)`, `r(p)`; `r(results)` with several `kd()` |
+| Benchmark strength | printed; `out$benchmark_strength` | printed; `r(r2dxj_x)`, `r(r2yxj_dx)`, `r(r2dz_x)`, `r(r2yz_dx)`, `r(benchmark_strength)` |
+| Bootstrap draws | `out$boot_samples` | `saving(filename)` |
+| Replications completed and failed | `out$N_successful`, `out$N_fail`; note below the table | `r(N_successful)`; warning below the table |
+| Plot of the kd sweep | `plot(out, type = "kd_sweep")` | `plot` option |
+| Histogram of the bootstrap distribution | `plot(out, type = "histogram")` | top panel of the `converge()` graph |
+| Convergence check | `converge = list(minreps = 1000, stepsize = 1000, threshold = 10000)`, then `plot(out, type = "convergence")` | `converge(minreps(1000) stepsize(1000) threshold(10000))` |
+| Convergence statistics | `out$convergence` | `r(conv_se_mean)`, `r(conv_p_range)`, ...; `savedata()` inside `converge()` |
+| The underlying `sensemakr` result | `out$sensemakr_orig` | run `sensemakr` with the same variables and options |
+
+## Differences worth knowing
+
+**Two-way clustering is available in R only.** With two cluster variables
+the R function combines three bootstraps with the estimator of Cameron,
+Gelbach, and Miller (2011) and reports normal-approximation intervals
+instead of percentile intervals. See
+[Clustered and stratified data](clustering.html).
+
+**Weights are available in R only.** The Stata command passes weights on to
+`sensemakr`, and the version of `sensemakr` on SSC does not accept them.
+
+**`program()` is specific to Stata.** It bootstraps an e-class program of
+your own that calls `sensemakr`. See
+[Get started in Stata](stata.html#bootstrapping-your-own-program).
+
+**Five Stata options depend on `sensemakr`.** `kr()`, `r2dxj_x()`,
+`r2yxj_dx()`, `bound_label()` and `reduce` are handed to `sensemakr`
+unchanged. The version on SSC at the time of writing does not accept them,
+so they stop with an error. The help file says so.
+
+**Row labels differ.** With several values of `kd`, R labels the rows
+`d (kd=0.5)` and Stata `d_.5`.
+
+## References
+
+Cameron, A. C., Gelbach, J. B., & Miller, D. L. (2011). Robust inference with
+multiway clustering. *Journal of Business & Economic Statistics*, 29(2),
+238--249. <https://doi.org/10.1198/jbes.2010.07136>

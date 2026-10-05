@@ -1,0 +1,501 @@
+---
+title: "Worked example: family CEOs and CEO pay"
+description: >
+  A complete sensitivity analysis with bootmakr in R and Stata: the four-stage
+  workflow of Lonati and Wulff (2026), applied to Chen, Chittoor and Vissa (2021).
+---
+
+```{r helpers, include = FALSE}
+source(file.path(getOption("bootmakr.precompute.dir"), "helpers.R"))
+```
+
+This article goes through a complete sensitivity analysis with `bootmakr`, from
+the first look at the standard errors to the check that the bootstrap can be
+trusted. It follows the four stages recommended by Lonati and Wulff (2026) and
+reproduces the empirical illustration of that paper.
+
+Every step is shown in R and in Stata. Pick a language on any tab and the rest
+of the page follows.
+
+## The study
+
+Chen, Chittoor, and Vissa (2021) ask whether CEOs who belong to the family that
+controls the firm are paid more than professional CEOs. In Model 2 of their
+Table 2 they regress the natural logarithm of total CEO pay on a family-CEO
+indicator and a set of controls: CEO tenure and education, firm sales, firm
+age, ownership shares, and year and industry indicators. The data cover 277
+Indian firms observed over several years, 2,011 firm-year observations in all,
+and the standard errors are clustered by firm. The coefficient of the family-CEO
+indicator is 0.33 (*p* = .001): family CEOs earn roughly 39 percent more.
+
+The authors themselves point out that the data are observational and that no
+natural experiment or instrument is available. CEO ability, family dynamics or
+firm strategy could drive both who becomes CEO and what the CEO is paid. The
+question for a sensitivity analysis is how strong such an omitted variable
+would have to be before the conclusion changes.
+
+## Data and model
+
+The authors share their data in an
+[OSF repository](https://osf.io/bsv2e/?view_only=885d1ed5498c4b3c8a1194882e468286).
+The file can be read from there directly.
+
+`r tabs_r("setup")`
+
+```{r setup}
+library(bootmakr)
+library(haven)
+
+osf  <- "https://osf.io/download/stk7y/?view_only=885d1ed5498c4b3c8a1194882e468286"
+chen <- read_dta(osf)
+
+ceo.model <- lg_ceopay ~ owner_ceo + ceo_tenure + PA_nic3_med + ceo_edu_dummy +
+  lg_sales + firm_age + promoters_pct + institutions_pct +
+  factor(year) + factor(nic_code_1digit)
+```
+
+`lg_ceopay` is the outcome, `owner_ceo` the family-CEO indicator, and
+`co_code` identifies the firm.
+
+`r tabs_stata("setup")`
+
+```{r, echo = FALSE, results = "asis"}
+cat("```stata", stata_code("first-steps", "data"), "",
+    stata_code("first-steps", "controls"), "```", "", sep = "\n")
+```
+
+`copy` downloads the file to the working directory. `lg_ceopay` is the
+outcome, `owner_ceo` the family-CEO indicator, and `co_code` identifies the
+firm. The global `$controls` holds the control variables and the year and
+industry indicators.
+
+`r tabs_end()`
+
+## Stages 1 and 2: which standard errors, and how different are they?
+
+The first two stages ask whether robust standard errors are needed and, if
+so, how far they are from the conventional ones. Here the answer to the first
+question is yes. Family-CEO status varies mostly between firms, and
+observations of the same firm are not independent, which is why Chen et al.
+(2021) cluster by firm. For the second question, estimate the model both
+ways.
+
+`r tabs_r("se")`
+
+```{r se}
+library(sandwich)
+
+fit <- lm(ceo.model, data = chen)
+
+se <- c(conventional = sqrt(vcov(fit)["owner_ceo", "owner_ceo"]),
+        clustered    = sqrt(vcovCL(fit, cluster = ~ co_code)["owner_ceo", "owner_ceo"]))
+
+round(c(estimate = coef(fit)[["owner_ceo"]], se,
+        ratio = se[["clustered"]] / se[["conventional"]]), 3)
+```
+
+`r tabs_stata("se")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("ceo-pay-1", "model2")
+```
+
+`r tabs_end()`
+
+The coefficient is `r num(coef(fit)[["owner_ceo"]])`, as published. Its
+cluster-robust standard error (`r num(se[["clustered"]], 3)`) is almost twice
+the conventional one (`r num(se[["conventional"]], 3)`). With a gap of this
+size the impact threshold of a confounding variable (ITCV) can no longer be
+read as a product of correlations, because it is computed from a *t* statistic
+that now rests on a different variance estimator. This is the situation
+`bootmakr` is made for.
+
+## Stage 3: how strong is a plausible omitted variable?
+
+An omitted variable is unobserved by definition, so its strength has to be
+judged against something that is observed. `sensemakr` (Cinelli & Hazlett,
+2020) does this with a *benchmark*: an observed control variable whose
+explanatory power serves as the yardstick. The question becomes: what would
+the coefficient be if a variable `kd` times as strong as the benchmark had
+been left out? `bootmakr` computes that bias-adjusted coefficient and
+bootstraps the whole procedure, resampling firms, to obtain its standard
+error, confidence interval and *p*-value.
+
+### An omitted variable as strong as CEO tenure
+
+We take CEO tenure as the benchmark. The call needs the model, the treatment,
+the benchmark and the cluster variable, nothing more.
+
+`r tabs_r("short")`
+
+```{r short, eval = FALSE}
+ceo.sensitivity <- bootmakr(formula = ceo.model,
+                            data = chen, treat = "owner_ceo",
+                            benchmark_covariates = "ceo_tenure",
+                            cluster = "co_code")
+```
+
+`r tabs_stata("short")`
+
+```stata
+bootmakr lg_ceopay owner_ceo $controls, ///
+    treat(owner_ceo) benchmark(ceo_tenure) cluster(co_code)
+```
+
+`r tabs_end()`
+
+By default `bootmakr` evaluates an omitted variable exactly as strong as the
+benchmark (`kd = 1`) and draws 1,000 bootstrap samples. No seed is set unless
+you supply one, so two runs of this call give slightly different results. For
+the numbers reported in the paper we use 10,000 replications and a fixed
+seed.
+
+`r tabs_r("kd1")`
+
+```{r kd1, cache = TRUE}
+ceo.sensitivity <- bootmakr(formula = ceo.model,
+                            data = chen, treat = "owner_ceo",
+                            benchmark_covariates = "ceo_tenure",
+                            cluster = "co_code",
+                            reps = 10000, seed = 912323, progress = FALSE)
+ceo.sensitivity
+```
+
+(`progress = FALSE` only switches off the progress bar, which is useful on
+screen but not in a document.)
+
+`r tabs_stata("kd1")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("ceo-pay-1", "kd1")
+```
+
+`r tabs_end()`
+
+```{r kd1-numbers, include = FALSE}
+r1  <- ceo.sensitivity$results
+st1 <- stata_results("ceo-pay-1")
+s1  <- st1[st1$label == "kd1", ]
+ob  <- ceo.sensitivity$benchmark_strength$observed
+im  <- ceo.sensitivity$benchmark_strength$implied
+```
+
+The first table holds the answer. Had a variable as strong as CEO tenure been
+omitted, the coefficient of family CEO would be `r num(r1$estimate)` instead of
+`r num(coef(fit)[["owner_ceo"]])`. That point estimate is the one `sensemakr`
+reports, and it is the same in R and Stata. What `bootmakr` adds is the
+inference: a bootstrap standard error of `r num(s1$se)`, a percentile 95
+percent confidence interval from `r num(s1$ci_lower)` to `r num(s1$ci_upper)`,
+and a bootstrap *p*-value of `r num(s1$p, 2, lead = FALSE)` in Stata
+(`r num(r1$pvalue, 2, lead = FALSE)` in R, with an interval from
+`r num(r1$ci_lower)` to `r num(r1$ci_upper)`). The two programs draw different
+random numbers, so their bootstrap results agree up to simulation error. The
+published effect would therefore no longer be statistically significant at
+the 5 percent level if an omitted variable as strong as CEO tenure were at
+work.
+
+The second block says what "as strong as CEO tenure" means. CEO tenure
+explains `r num(100 * ob$r2dxj.x, 1)` percent of the variance of family-CEO
+status that the other covariates leave unexplained (a partial correlation of
+`r num(ob$r_dxj.x, 2, lead = FALSE)`), and `r num(100 * ob$r2yxj.dx, 1)`
+percent of the remaining variance of log CEO pay (a partial correlation of
+`r num(ob$r_yxj.dx, 2, lead = FALSE)`). The omitted variable assumed at
+`kd = 1` has partial correlations of about `r num(im$r_dz.x, 2, lead = FALSE)`
+and `r num(im$r_yz.dx, 2, lead = FALSE)` with the two variables. These are
+descriptive statistics of the data. No standard error enters them, so they do
+not depend on whether the model is estimated with conventional or clustered
+standard errors, and they are the same in every bootstrap run. The article
+[How strong is the benchmark?](benchmark-strength.html) explains the block in
+detail.
+
+### An omitted variable half as strong
+
+Is the conclusion equally fragile for a weaker omitted variable? Set `kd` to
+0.5.
+
+`r tabs_r("kd05")`
+
+```{r kd05, cache = TRUE}
+half <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+                 benchmark_covariates = "ceo_tenure", kd = 0.5,
+                 cluster = "co_code",
+                 reps = 10000, seed = 912323, progress = FALSE)
+half
+```
+
+`r tabs_stata("kd05")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("ceo-pay-1", "kd05")
+```
+
+`r tabs_end()`
+
+```{r kd05-numbers, include = FALSE}
+r05 <- half$results
+s05 <- st1[st1$label == "kd05", ]
+```
+
+An omitted variable half as strong as CEO tenure leaves the conclusion intact:
+the adjusted coefficient is `r num(r05$estimate)`, with a confidence interval
+from `r num(s05$ci_lower)` to `r num(s05$ci_upper)` and *p* =
+`r num(s05$p, 2, lead = FALSE)` in Stata (`r num(r05$ci_lower)` to
+`r num(r05$ci_upper)` and *p* = `r num(r05$pvalue, 3, lead = FALSE)` in R). The
+finding of Chen et al. (2021) withstands moderate omitted-variable bias, but
+not an omitted variable as strong as CEO tenure itself.
+
+### The breakdown point
+
+Instead of trying one strength at a time, give `kd` a range of values.
+`bootmakr` then reports one row per value, and the plot shows where the
+adjusted estimate stops being statistically significant: the *breakdown
+point*. With CEO tenure the result already breaks down between `kd = 0.5` and
+`kd = 1`, which leaves little to plot, so we take a weaker benchmark, firm
+age, and let `kd` run from 0.5 to 4.
+
+`r tabs_r("sweep")`
+
+```{r sweep, cache = TRUE}
+breakdown <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+                      benchmark_covariates = "firm_age",
+                      kd = seq(0.5, 4, by = 0.5),
+                      cluster = "co_code",
+                      reps = 10000, seed = 912323, progress = FALSE)
+breakdown
+```
+
+```{r sweep-plot, fig.cap = "Bias-adjusted effect of family CEO with bootstrap 95 percent confidence intervals, for an omitted variable 0.5 to 4 times as strong as firm age (R)."}
+plot(breakdown, type = "kd_sweep")
+```
+
+`r tabs_stata("sweep")`
+
+The `plot` option draws the figure.
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("ceo-pay-2", "sweep")
+```
+
+```{r sweep-stata-plot, echo = FALSE, fig.cap = "Bias-adjusted effect of family CEO with bootstrap 95 percent confidence intervals, for an omitted variable 0.5 to 4 times as strong as firm age (Stata)."}
+knitr::include_graphics(stata_graph("ceo-pay-sweep.svg"), error = FALSE)
+```
+
+`r tabs_end()`
+
+```{r sweep-numbers, include = FALSE}
+rs  <- breakdown$results
+st2 <- stata_results("ceo-pay-2")
+ss  <- st2[st2$label == "sweep", ]
+ims <- breakdown$benchmark_strength$implied
+at  <- function(d, k, col) d[[col]][abs(d$kd - k) < 1e-8]
+```
+
+Solid markers are significant at the 5 percent level, hollow markers are not.
+The adjusted estimate declines only gently, from `r num(at(rs, 0.5, "estimate"))`
+to `r num(at(rs, 4, "estimate"))`, while its confidence interval widens. The
+breakdown point is at about 2.5: an omitted variable would have to be roughly
+two and a half times as strong as firm age to make the effect statistically
+insignificant (*p* = `r num(at(ss, 2.5, "p"), 3, lead = FALSE)` in Stata and
+`r num(at(rs, 2.5, "pvalue"), 3, lead = FALSE)` in R at `kd = 2.5`). In terms
+of the benchmark-strength block, that is a variable with a partial
+R^2^ of about `r num(at(ims, 2.5, "r2dz.x"), 2, lead = FALSE)` with family-CEO
+status and `r num(at(ims, 2.5, "r2yz.dx"), 3, lead = FALSE)` with CEO pay.
+
+### A group of covariates as benchmark
+
+The benchmark can also be a group of covariates taken together, here CEO
+tenure and CEO education. Because the two are jointly stronger than either
+one alone, smaller multiples are of interest.
+
+`r tabs_r("grouped")`
+
+```{r grouped, cache = TRUE}
+grouped <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+                    gbenchmark_covariates = c("ceo_tenure", "ceo_edu_dummy"),
+                    kd = seq(0.1, 0.5, by = 0.1),
+                    cluster = "co_code",
+                    reps = 10000, seed = 912323, progress = FALSE)
+grouped
+```
+
+`r tabs_stata("grouped")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("ceo-pay-2", "grouped")
+```
+
+`r tabs_end()`
+
+```{r grouped-numbers, include = FALSE}
+rg  <- grouped$results
+sg  <- st2[st2$label == "grouped", ]
+obg <- grouped$benchmark_strength$observed
+g.last  <- max(sg$kd[sg$p < 0.05])
+g.first <- min(sg$kd[sg$p >= 0.05])
+```
+
+Together, CEO tenure and CEO education explain
+`r num(100 * obg$r2dxj.x, 1)` percent of the remaining variance of
+family-CEO status and `r num(100 * obg$r2yxj.dx, 1)` percent of that of CEO
+pay. Against this stronger yardstick the effect remains statistically
+significant for an omitted variable up to `r g.last` times as strong as the
+two together and no longer at `r g.first` times (*p* =
+`r num(at(sg, g.first, "p"), 3, lead = FALSE)` in Stata,
+`r num(at(rg, g.first, "pvalue"), 3, lead = FALSE)` in R).
+
+## Stage 4: can the bootstrap be trusted?
+
+A bootstrap result is only as good as the bootstrap behind it. Three checks
+are worth making.
+
+**Enough clusters.** The cluster bootstrap resamples firms, and it needs
+enough of them. Here there are 277, with up to ten observations each, which
+the simulations in Lonati and Wulff (2026) suggest is sufficient.
+
+**No failed replications.** Some bootstrap samples can make the assumed
+omitted variable impossible, in the sense that it would have to explain more
+variance than is left. Such replications fail and are dropped, and `bootmakr`
+says so below the table. There is no such note in any of the runs above. A
+handful of failures is harmless; many of them mean that the assumed strength
+is close to the limit of what the data allow.
+
+**Enough replications.** The headline result sits close to the 5 percent
+threshold, so the number of replications matters. Run the default call (1,000
+replications) with four different seeds:
+
+`r tabs_r("seeds")`
+
+```{r seeds, cache = TRUE}
+seeds <- c(101, 202, 303, 404)
+
+runs <- lapply(seeds, function(s) {
+  bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+           benchmark_covariates = "ceo_tenure", cluster = "co_code",
+           seed = s, progress = FALSE)$results
+})
+
+cbind(seed = seeds, do.call(rbind, runs)[, c("pvalue", "ci_lower", "ci_upper")])
+```
+
+`r tabs_stata("seeds")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("ceo-pay-1", "seeds")
+```
+
+`r tabs_end()`
+
+```{r seeds-numbers, include = FALSE}
+p.r     <- vapply(runs, function(r) r$pvalue, numeric(1))
+p.stata <- as.numeric(sub(".*p = ([0-9.]+).*", "\\1",
+                          grep("^seed", stata_output("ceo-pay-1", "seeds"), value = TRUE)))
+straddle <- any(c(p.r, p.stata) < 0.05) && any(c(p.r, p.stata) >= 0.05)
+if (!straddle && !.pending()) stop("The seed runs no longer straddle .05: revise the next paragraph.")
+```
+
+With 1,000 replications the *p*-value changes from seed to seed: between
+`r num(min(p.r), 3, lead = FALSE)` and `r num(max(p.r), 3, lead = FALSE)` in
+these R runs, and between `r num(min(p.stata), 3, lead = FALSE)` and
+`r num(max(p.stata), 3, lead = FALSE)` in the Stata runs. The differences are
+small, but the eight values lie on both sides of .05, so the verdict would
+depend on the seed. The `converge` option shows how many replications it
+takes for the result to settle. It runs the bootstrap once, here with 40,000
+replications, and recomputes the standard error and the *p*-value on the
+first 1,000, 2,000, ... replications.
+
+`r tabs_r("converge")`
+
+```{r converge, cache = TRUE}
+check <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+                  benchmark_covariates = "ceo_tenure", cluster = "co_code",
+                  reps = 40000, seed = 912323, progress = FALSE,
+                  converge = list(minreps = 1000, stepsize = 1000,
+                                  threshold = 10000))
+check
+```
+
+```{r converge-plot, fig.height = 7.5, fig.cap = "Bootstrap distribution of the adjusted estimate (top), and its standard error (middle) and p-value (bottom) as the number of replications grows (R)."}
+plot(check, type = "convergence")
+```
+
+`r tabs_stata("converge")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("ceo-pay-3", "converge")
+```
+
+```{r converge-stata-plot, echo = FALSE, fig.cap = "Bootstrap distribution of the adjusted estimate (top), and its standard error (middle) and p-value (bottom) as the number of replications grows (Stata)."}
+knitr::include_graphics(stata_graph("ceo-pay-converge.svg"), error = FALSE)
+```
+
+`r tabs_end()`
+
+```{r converge-numbers, include = FALSE}
+cv  <- check$convergence$summary
+cvs <- utils::read.delim(file.path(.pc_dir(), "stata", "output", "ceo-pay-3-convergence.txt"))
+```
+
+The table below the results summarizes the 40 checkpoints: the mean, the
+range and the coefficient of variation of the standard error and of the
+*p*-value, first across all checkpoints and then from the threshold of 10,000
+replications onwards. In the Stata run the standard error varies by
+`r num(cvs$se_range, 4, lead = FALSE)` over all checkpoints, a coefficient of
+variation of `r num(cvs$se_cv, 2)` percent: it is stable from the outset.
+The *p*-value moves by `r num(cvs$p_range, 3, lead = FALSE)` overall and by
+`r num(cvs$p_range_high, 3, lead = FALSE)` once 10,000 or more replications
+are used. The R run tells the same story
+(`r num(cv$se_range, 4, lead = FALSE)`, `r num(cv$se_cv, 2)` percent,
+`r num(cv$p_range, 3, lead = FALSE)` and
+`r num(cv$p_range_hi, 3, lead = FALSE)`). The histogram is unimodal and well
+behaved. Inference based on 10,000 replications is therefore credible here,
+and the verdict stands: an omitted variable as strong as CEO tenure would
+leave the effect of family CEO positive but no longer statistically
+significant at the 5 percent level.
+
+## What to report
+
+A report of this analysis would state
+
+- the benchmark and why it was chosen (here CEO tenure, a substantively
+  meaningful covariate that is closely tied to who becomes a family CEO), and
+  its strength in partial R^2^ terms;
+- the multiples `kd` examined, and for each the bias-adjusted coefficient with
+  its bootstrap confidence interval and *p*-value;
+- how the bootstrap was run: the resampling unit (firms), the number of
+  replications, the seed, and the number of failed replications;
+- the outcome of the convergence check if the verdict is close to the
+  significance threshold.
+
+For example: *Assuming an omitted variable as strong as CEO tenure, the
+bias-adjusted effect of family CEO on log CEO pay is
+`r num(r1$estimate)` (cluster bootstrap with 10,000 replications; percentile
+95% CI [`r num(s1$ci_lower)`, `r num(s1$ci_upper)`], p =
+`r num(s1$p, 2, lead = FALSE)`).*
+
+A sensitivity analysis does not replace a research design that rules out
+omitted variables. It makes explicit how much unobserved confounding a
+conclusion can take, and it leaves the judgment of whether that much is
+plausible to the reader.
+
+## Notes on reproducibility
+
+The R results on this page were produced with R `r getRversion()`,
+`bootmakr` `r packageVersion("bootmakr")` and `sensemakr`
+`r packageVersion("sensemakr")`; the Stata results with StataNow 19.5,
+`bootmakr` 1.1.0 and the `sensemakr` command from SSC. With the seed shown,
+each program reproduces its own numbers exactly. On an ordinary laptop, 1,000
+replications of this model take about 20 seconds in R and 45 seconds in
+Stata, and 10,000 replications under 4 and 8 minutes.
+
+## References
+
+Chen, G., Chittoor, R., & Vissa, B. (2021). Does nepotism run in the family?
+CEO pay and pay-performance sensitivity in Indian family firms. *Strategic
+Management Journal*, 42(7), 1326--1343. <https://doi.org/10.1002/smj.3263>
+
+Cinelli, C., & Hazlett, C. (2020). Making sense of sensitivity: Extending
+omitted variable bias. *Journal of the Royal Statistical Society: Series B*,
+82(1), 39--67. <https://doi.org/10.1111/rssb.12348>
+
+Lonati, S., & Wulff, J. N. (2026). *Why you should not use the ITCV with
+robust standard errors (and what to do instead)*. Working paper.

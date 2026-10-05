@@ -1,0 +1,3 @@
+label	seconds
+sweep	    591.6
+grouped	   1003.4

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 277" width="240" height="277" role="img" aria-label="bootmakr logo: adjusted estimates with confidence intervals that widen until they include zero">
+  <!-- Hexagon -->
+  <polygon points="120,10 228,72 228,205 120,267 12,205 12,72" fill="#1e2f5c" stroke="#131f40" stroke-width="6" stroke-linejoin="round"/>
+  <!-- Axis and zero line of the kd-sweep plot -->
+  <line x1="46" y1="70" x2="46" y2="214" stroke="#ffffff" stroke-opacity="0.55" stroke-width="3" stroke-linecap="round"/>
+  <line x1="46" y1="186" x2="200" y2="186" stroke="#ffffff" stroke-opacity="0.55" stroke-width="3" stroke-dasharray="7 6" stroke-linecap="round"/>
+  <!-- Bootstrap confidence intervals of the adjusted estimate for a stronger and stronger omitted variable -->
+  <g stroke="#ffffff" stroke-width="6" stroke-linecap="round">
+    <line x1="72"  y1="76"  x2="72"  y2="132"/>
+    <line x1="100" y1="82"  x2="100" y2="148"/>
+    <line x1="128" y1="88"  x2="128" y2="166"/>
+    <line x1="156" y1="92"  x2="156" y2="194"/>
+    <line x1="184" y1="94"  x2="184" y2="218"/>
+  </g>
+  <!-- Estimates: solid while the interval excludes zero, hollow once it includes zero -->
+  <g fill="#ffffff">
+    <circle cx="72"  cy="104" r="9.5"/>
+    <circle cx="100" cy="115" r="9.5"/>
+    <circle cx="128" cy="127" r="9.5"/>
+  </g>
+  <g fill="#1e2f5c" stroke="#ffffff" stroke-width="5">
+    <circle cx="156" cy="139" r="9"/>
+    <circle cx="184" cy="151" r="9"/>
+  </g>
+</svg>

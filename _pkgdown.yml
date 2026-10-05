@@ -1,0 +1,104 @@
+url: https://jespernwulff.github.io/bootmakr/
+
+template:
+  bootstrap: 5
+  bslib:
+    primary: "#1e2f5c"
+    link-color: "#1e3f8a"
+    base_font: {google: "IBM Plex Sans"}
+    heading_font: {google: "IBM Plex Sans"}
+    code_font: {google: "IBM Plex Mono"}
+    headings-font-weight: 600
+    border-radius: 0.3rem
+
+home:
+  title: bootmakr
+  description: >
+    Bootstrap inference for sensitivity analysis to omitted variables, in R
+    and Stata. Companion software to Lonati and Wulff (2026).
+  links:
+  - text: Stata command on GitHub
+    href: https://github.com/jespernwulff/bootmakr-stata
+  - text: Report a bug (Stata)
+    href: https://github.com/jespernwulff/bootmakr-stata/issues
+  sidebar:
+    structure: [links, license, citation, authors]
+
+navbar:
+  bg: primary
+  type: dark
+  structure:
+    left: [start, example, guides, reference, news]
+    right: [search, source]
+  components:
+    start:
+      text: Get started
+      menu:
+      - text: In R
+        href: articles/bootmakr.html
+      - text: In Stata
+        href: articles/stata.html
+    example:
+      text: Worked example
+      href: articles/ceo-pay.html
+    guides:
+      text: Guides
+      menu:
+      - text: How strong is the benchmark?
+        href: articles/benchmark-strength.html
+      - text: Clustered and stratified data
+        href: articles/clustering.html
+      - text: R and Stata side by side
+        href: articles/r-and-stata.html
+    reference:
+      text: Reference
+      menu:
+      - text: R functions
+        href: reference/index.html
+      - text: Stata help file
+        href: articles/stata-help.html
+    news:
+      text: News
+      href: news/index.html
+    source:
+      icon: fab fa-github fa-lg
+      aria-label: Source code on GitHub
+      menu:
+      - text: R package
+        href: https://github.com/jespernwulff/bootmakr
+      - text: Stata command
+        href: https://github.com/jespernwulff/bootmakr-stata
+
+articles:
+- title: Get started
+  desc: Install bootmakr and run a first analysis.
+  contents:
+  - bootmakr
+  - articles/stata
+- title: Worked example
+  desc: A published study taken through a complete analysis, in both languages.
+  contents:
+  - articles/ceo-pay
+- title: Guides
+  desc: What the output means and which options to choose.
+  contents:
+  - articles/benchmark-strength
+  - articles/clustering
+  - articles/r-and-stata
+- title: Stata reference
+  contents:
+  - articles/stata-help
+
+reference:
+- title: Bootstrap sensitivity analysis
+  contents:
+  - bootmakr
+- title: Methods for the result
+  contents:
+  - print.bootmakr
+  - plot.bootmakr
+
+footer:
+  structure:
+    left: developed_by
+    right: built_with

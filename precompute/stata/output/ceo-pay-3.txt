@@ -1,0 +1,82 @@
+
+. 
+end of do-file
+
+. 
+. use "CEO pay project - Data for sharing FINAL.dta", clear
+
+. global controls "ceo_tenure PA_nic3_med ceo_edu_dummy lg_sales firm_age promoters_pct institutions_pct i.year i.nic_co
+> de_1digit"
+
+. 
+. tic
+
+. * >>> converge
+. bootmakr lg_ceopay owner_ceo $controls, ///
+>     treat(owner_ceo) benchmark(ceo_tenure) cluster(co_code) ///
+>     reps(40000) seed(912323) ///
+>     converge(minreps(1000) stepsize(1000) threshold(10000))
+
+Bootstrap results                               Number of obs     =     2,011
+                                                Replications      =    40,000
+
+                 (Replications based on 277 clusters in co_code)
+------------------------------------------------------------------------------
+             |      Observed    Bootstrap                    Percentile
+             |       Coef.      Std. Err.    P-value    [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+owner_ceo    |     .254114      .1278329      0.0624    -.0141857    .4874146
+------------------------------------------------------------------------------
+Note: CI is percentile bootstrap confidence interval
+      P-value is bootstrap p-value (H0: owner_ceo = 0)
+      Benchmark: ceo_tenure, kd = 1, ky = 1
+
+Benchmark strength (descriptive; no standard errors involved)
+------------------------------------------------------------------------------
+Benchmark: ceo_tenure
+                                                 Partial R2    |Partial corr.|
+  with owner_ceo | X                                 0.1447             0.380
+  with lg_ceopay | owner_ceo, X                      0.0034             0.059
+------------------------------------------------------------------------------
+Implied strength of the omitted variable (sensemakr bounds):
+     kd      ky      R2dz.x     R2yz.dx    |r_dz.x|   |r_yz.dx|
+   1.00    1.00       0.1691     0.0048      0.411      0.070
+------------------------------------------------------------------------------
+Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
+      treatment given the covariates (with the outcome given treatment
+      and covariates). |r| = square root, i.e. the partial-correlation
+      scale of the ITCV. Descriptive only: no t-implied correlation or
+      threshold is reported.
+
+Computing convergence statistics........................................
+------------------------------------------------------------------------------
+Bootstrap convergence diagnostics
+Reps: 1000(1000)40000
+------------------------------------------------------------------------------
+Summary across replication counts
+              |    Mean      Range       CV%       Range       CV%
+              |    (all)     (all)      (all)     (>=10000)  (>=10000)
+--------------+---------------------------------------------------------------
+Std. error    |    0.1282    0.0047      0.57      0.0008      0.14
+P-value       |    0.0620    0.0100      2.64      0.0036      1.50
+------------------------------------------------------------------------------
+Note: CV% = Coefficient of variation (standard deviation / mean x 100)
+      (all) = statistics across all replication counts
+      (>=10000) = statistics for replication counts >= 10000
+
+. * <<<
+. keep_conv ceo-pay-3
+(file output/ceo-pay-3-convergence.txt not found)
+
+. keep_result converge
+
+. toc converge
+
+. quietly graph export "$pc_out/ceo-pay-converge.svg", replace
+
+. 
+. file close res
+
+. file close tim
+
+. log close pc

@@ -1,0 +1,199 @@
+---
+title: "Clustered and stratified data"
+description: >
+  How to choose what the bootstrap resamples: observations, clusters, two
+  cluster dimensions, or units within strata.
+---
+
+```{r helpers, include = FALSE}
+source(file.path(getOption("bootmakr.precompute.dir"), "helpers.R"))
+```
+
+`bootmakr` obtains its standard errors, confidence intervals and *p*-values
+by resampling the data. What it resamples is your decision, and it should
+follow one rule: **resample the units that you would treat as independent
+when choosing standard errors for the regression itself.** If you would
+cluster the standard errors by firm, resample firms.
+
+| Your regression would use | Resample | R | Stata |
+|---|---|---|---|
+| heteroskedasticity-robust standard errors | observations | *(nothing to add)* | *(nothing to add)* |
+| standard errors clustered in one dimension | whole clusters | `cluster = "firm"` | `cluster(firm)` |
+| standard errors clustered in two dimensions | each dimension and their intersection | `cluster = c("firm", "year")` | not available |
+| a stratified sample | within strata | `strata = "region"` | `strata(region)` |
+| clusters sampled within strata | clusters within strata | `cluster = "firm", strata = "region"` | `cluster(firm) strata(region)` |
+
+## Observations or clusters
+
+Without `cluster`, each bootstrap sample draws observations with
+replacement. This allows the error variance to differ across observations,
+the bootstrap counterpart of heteroskedasticity-robust standard errors. It
+still assumes that observations are independent.
+
+When observations come in groups (employees in firms, firm-years in firms,
+respondents in villages), that assumption fails, and the bootstrap must draw
+whole groups. The example of [Get started](bootmakr.html) shows what is at
+stake. The data are firm-years, about seven per firm, and whether the CEO
+belongs to the owning family varies mostly between firms rather than within
+them. Here is the same call twice, once resampling firm-years and once
+resampling firms.
+
+`r tabs_r("compare")`
+
+```{r compare, cache = TRUE}
+library(bootmakr)
+library(haven)
+
+osf  <- "https://osf.io/download/stk7y/?view_only=885d1ed5498c4b3c8a1194882e468286"
+chen <- read_dta(osf)
+
+ceo.model <- lg_ceopay ~ owner_ceo + ceo_tenure + PA_nic3_med + ceo_edu_dummy +
+  lg_sales + firm_age + promoters_pct + institutions_pct +
+  factor(year) + factor(nic_code_1digit)
+
+by.firm.year <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+                         benchmark_covariates = "firm_age",
+                         seed = 123, progress = FALSE)
+
+by.firm <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+                    benchmark_covariates = "firm_age", cluster = "co_code",
+                    seed = 123, progress = FALSE)
+
+rbind("firm-years" = by.firm.year$results,
+      "firms"      = by.firm$results)[, c("estimate", "se", "ci_lower", "ci_upper", "pvalue")]
+```
+
+`r tabs_stata("compare")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("first-steps", "data", output = FALSE)
+stata_show("first-steps", "controls")
+stata_show("first-steps", "compare")
+```
+
+`r tabs_end()`
+
+```{r compare-numbers, include = FALSE}
+se.obs  <- by.firm.year$results$se
+se.firm <- by.firm$results$se
+```
+
+The adjusted estimate is the same in both rows, because it is computed from
+the original sample. Only its uncertainty changes, and it changes a lot: the
+standard error is `r num(se.obs, 3)` when firm-years are resampled and
+`r num(se.firm, 3)` when firms are, `r num(se.firm / se.obs, 1)` times as
+large. Treating the firm-years as independent overstates how much
+information the data hold about family CEOs, in the bootstrap just as in the
+regression itself.
+
+The cluster bootstrap needs a reasonable number of clusters, just as
+cluster-robust standard errors do. The usual guidance is a few dozen at the
+least, and more when clusters differ much in size (Cameron & Miller, 2015).
+With few or very unequal clusters its confidence intervals can be too
+narrow, and no number of replications repairs that. The simulations in
+Lonati and Wulff (2026) document how coverage depends on the number and
+balance of clusters.
+
+## Two cluster dimensions
+
+Panel data are often clustered in two ways at once: observations of the same
+firm are related, and so are observations of the same year. In R, give
+`cluster` two variables. `bootmakr` then runs three bootstraps, one
+resampling each dimension and one resampling their intersection, and
+combines the three variances as V~firm~ + V~year~ − V~firm×year~, following
+Cameron, Gelbach, and Miller (2011).
+
+To see it at work we simulate a small panel in which both the treatment and
+the error term have a firm component and a year component.
+
+```{r panel}
+set.seed(2026)
+firms <- 60
+years <- 25
+panel <- expand.grid(firm = seq_len(firms), year = seq_len(years))
+
+by.firm <- function() rnorm(firms)[panel$firm]
+by.year <- function() rnorm(years)[panel$year]
+
+panel$x <- rnorm(nrow(panel))
+panel$d <- 0.5 * panel$x + by.firm() + by.year() + rnorm(nrow(panel))
+panel$y <- 0.3 * panel$d + 0.5 * panel$x + by.firm() + by.year() + rnorm(nrow(panel))
+```
+
+```{r twoway, cache = TRUE}
+one.way <- bootmakr(y ~ d + x, data = panel, treat = "d",
+                    benchmark_covariates = "x", cluster = "firm",
+                    seed = 123, progress = FALSE)
+
+two.way <- bootmakr(y ~ d + x, data = panel, treat = "d",
+                    benchmark_covariates = "x", cluster = c("firm", "year"),
+                    seed = 123, progress = FALSE)
+two.way
+```
+
+```{r twoway-numbers, include = FALSE}
+se1 <- one.way$results$se
+se2 <- two.way$results$se
+```
+
+Clustering by firm alone gives a standard error of `r num(se1, 3)`. Allowing
+for the year dimension as well raises it to `r num(se2, 3)`.
+
+A few things differ from the one-way case.
+
+- The result is a variance, not a bootstrap distribution, so the confidence
+  interval and the *p*-value use a normal approximation (estimate ± 1.96
+  standard errors) instead of percentiles. The output says so.
+- `reps` is the number of replications *per* bootstrap, so the run does three
+  times the work.
+- The combined variance can come out negative in small samples. `bootmakr`
+  then falls back on the larger of the two one-way variances and tells you.
+- A dimension with very few clusters, such as five years, cannot support
+  cluster-robust inference of any kind. `bootmakr` warns when a dimension has
+  fewer than ten.
+- The draws of the three bootstraps are kept in `$boot_samples$G`, `$H` and
+  `$GH`.
+
+Two-way clustering cannot be combined with `strata`, and it is not available
+in the Stata command.
+
+## Strata
+
+If the sample was drawn separately within strata (regions, industries, size
+classes), the bootstrap should respect that: `strata` resamples within each
+stratum, so every bootstrap sample has the same number of units per stratum
+as the data. Combined with `cluster`, whole clusters are resampled within
+strata.
+
+`r tabs_r("strata")`
+
+```r
+bootmakr(y ~ d + x1 + x2, data = dat, treat = "d",
+         benchmark_covariates = "x1",
+         cluster = "firm", strata = "region")
+```
+
+`r tabs_stata("strata")`
+
+```stata
+bootmakr y d x1 x2, treat(d) benchmark(x1) cluster(firm) strata(region)
+```
+
+`r tabs_end()`
+
+## References
+
+Cameron, A. C., Gelbach, J. B., & Miller, D. L. (2011). Robust inference with
+multiway clustering. *Journal of Business & Economic Statistics*, 29(2),
+238--249. <https://doi.org/10.1198/jbes.2010.07136>
+
+Cameron, A. C., & Miller, D. L. (2015). A practitioner's guide to
+cluster-robust inference. *Journal of Human Resources*, 50(2), 317--372.
+<https://doi.org/10.3368/jhr.50.2.317>
+
+Chen, G., Chittoor, R., & Vissa, B. (2021). Does nepotism run in the family?
+CEO pay and pay-performance sensitivity in Indian family firms. *Strategic
+Management Journal*, 42(7), 1326--1343. <https://doi.org/10.1002/smj.3263>
+
+Lonati, S., & Wulff, J. N. (2026). *Why you should not use the ITCV with
+robust standard errors (and what to do instead)*. Working paper.

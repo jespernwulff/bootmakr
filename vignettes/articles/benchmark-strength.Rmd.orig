@@ -1,0 +1,196 @@
+---
+title: "How strong is the benchmark?"
+description: >
+  What "an omitted variable as strong as the benchmark" means, in partial
+  R-squared values and partial correlations, and where the numbers in the
+  benchmark-strength block come from.
+---
+
+```{r helpers, include = FALSE}
+source(file.path(getOption("bootmakr.precompute.dir"), "helpers.R"))
+```
+
+`bootmakr` reports the coefficient you would have obtained had a variable "as
+strong as" an observed covariate been omitted. That phrase needs a
+definition, and readers who are used to the impact threshold of a confounding
+variable (ITCV) expect one in terms of correlations. The block that
+`bootmakr` prints below its results gives it. This article explains what the
+block contains, how to reproduce it, and what it should not be used for.
+
+## Two relationships, two numbers
+
+An omitted variable biases a regression coefficient only if it is related to
+both the treatment and the outcome. `sensemakr` measures the two
+relationships with partial R^2^ values (Cinelli & Hazlett, 2020):
+
+- the share of the variance of the **treatment** that the omitted variable
+  explains, after the observed covariates have explained what they can;
+- the share of the variance of the **outcome** that it explains, after the
+  treatment and the observed covariates have explained what they can.
+
+The square roots of these shares are the absolute values of partial
+correlations. Nothing is known about an omitted variable, so the same two
+numbers are computed for an observed covariate, the benchmark, and the
+omitted variable is then assumed to be a multiple of it.
+
+## The block
+
+We use the data of the [worked example](ceo-pay.html): the effect of a
+family CEO (`owner_ceo`) on the logarithm of CEO pay, with CEO tenure as the
+benchmark and two multiples of it.
+
+```{r block}
+library(bootmakr)
+library(haven)
+
+osf  <- "https://osf.io/download/stk7y/?view_only=885d1ed5498c4b3c8a1194882e468286"
+chen <- read_dta(osf)
+
+ceo.model <- lg_ceopay ~ owner_ceo + ceo_tenure + PA_nic3_med + ceo_edu_dummy +
+  lg_sales + firm_age + promoters_pct + institutions_pct +
+  factor(year) + factor(nic_code_1digit)
+
+out <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+                benchmark_covariates = "ceo_tenure", kd = c(0.5, 1),
+                cluster = "co_code", reps = 100, seed = 123, progress = FALSE)
+
+out$benchmark_strength
+```
+
+```{r numbers, include = FALSE}
+ob <- out$benchmark_strength$observed
+im <- out$benchmark_strength$implied
+```
+
+(The block does not depend on the bootstrap, so a small number of
+replications is enough here.)
+
+`$observed` describes the benchmark. CEO tenure explains
+`r num(100 * ob$r2dxj.x, 1)` percent of the variance of family-CEO status
+that the other covariates leave unexplained (`r2dxj.x`) and
+`r num(100 * ob$r2yxj.dx, 1)` percent of the variance of log CEO pay that the
+treatment and the other covariates leave unexplained (`r2yxj.dx`). The
+partial correlations are `r num(ob$r_dxj.x, 2, lead = FALSE)` and
+`r num(ob$r_yxj.dx, 2, lead = FALSE)`: tenure is clearly related to who is a
+family CEO and only weakly related to pay once family-CEO status and the
+other controls are held fixed.
+
+`$implied` describes the omitted variable that each row of the results table
+assumes: its partial R^2^ with the treatment (`r2dz.x`) and with the outcome
+(`r2yz.dx`), and the corresponding partial correlations.
+
+In Stata the same numbers are printed below the bootstrap table and returned
+in `r(r2dxj_x)`, `r(r2yxj_dx)` and the matrix `r(benchmark_strength)`.
+
+## Where the numbers come from
+
+The observed strength can be reproduced from two regressions: the model
+itself, and a regression of the treatment on the covariates.
+
+```{r by-hand}
+fit   <- lm(ceo.model, data = chen)
+fit.d <- lm(update(ceo.model, owner_ceo ~ . - owner_ceo), data = chen)
+
+# benchmark with the outcome, given the treatment and the other covariates
+sensemakr::partial_r2(fit, covariates = "ceo_tenure")
+
+# benchmark with the treatment, given the other covariates
+sensemakr::partial_r2(fit.d, covariates = "ceo_tenure")
+```
+
+A partial R^2^ of a single covariate is a function of its *t* statistic and
+the residual degrees of freedom, *t*^2^ / (*t*^2^ + df), and the *t*
+statistic used here is the conventional one. This does not make the block
+depend on the choice of standard errors. The partial R^2^ is equally the
+proportional reduction in the residual sum of squares when the covariate is
+added to the model, a quantity that involves no standard error at all. The
+*t* statistic is only a convenient way of computing it.
+
+```{r rss}
+rss <- function(m) sum(residuals(m)^2)
+1 - rss(fit) / rss(update(fit, . ~ . - ceo_tenure))
+```
+
+The implied strength of the omitted variable follows from the observed
+strength of the benchmark. `kd` is defined as the variance of the treatment
+explained by the omitted variable relative to the variance explained by the
+benchmark, both measured after the *remaining* covariates have been taken
+into account. Restating this as a partial R^2^ given *all* covariates,
+benchmark included, gives
+
+```{r implied}
+kd  <- c(0.5, 1)
+r2d <- sensemakr::partial_r2(fit.d, covariates = "ceo_tenure")
+
+kd * r2d / (1 - r2d)
+```
+
+which is the column `r2dz.x`. The corresponding value for the outcome,
+`r2yz.dx`, is an upper bound that also depends on `ky` and on the benchmark's
+relationship with the treatment. Cinelli and Hazlett (2020) derive both
+expressions. This is why the omitted variable at `kd = 1` is somewhat
+stronger than the benchmark itself in the block: the two are measured
+against different sets of covariates.
+
+`bootmakr` takes these values from `sensemakr`. You can obtain them directly:
+
+```{r bounds}
+bounds <- sensemakr::ovb_bounds(fit, treatment = "owner_ceo",
+                                benchmark_covariates = "ceo_tenure",
+                                kd = c(0.5, 1))
+bounds[, c("bound_label", "r2dz.x", "r2yz.dx", "adjusted_estimate")]
+```
+
+The last column is the adjusted estimate that `bootmakr` reports and
+bootstraps.
+
+## What the block is for
+
+**It makes the assumption concrete.** "An omitted variable as strong as CEO
+tenure" becomes "an omitted variable with partial correlations of about
+`r num(im$r_dz.x[2], 2, lead = FALSE)` with family-CEO status and
+`r num(im$r_yz.dx[2], 2, lead = FALSE)` with CEO pay". Readers can judge
+whether that is a little or a lot in their field.
+
+**It describes the data, not the inference.** Every number in the block is a
+function of the data alone. It is the same under conventional,
+heteroskedasticity-robust and cluster-robust standard errors, and the same
+in every bootstrap run. The problem that motivates `bootmakr`, that robust
+standard errors change the *t* statistic on which the ITCV rests, does not
+touch it.
+
+**It is not a threshold.** The block does not say how strong an omitted
+variable must be to overturn the result. That would require a critical value,
+which brings the standard error back in. Whether a given strength overturns
+the result is answered by the bootstrap confidence interval in the table
+above the block, and the strength at which it first does so is the
+[breakdown point](ceo-pay.html#the-breakdown-point). Note also that the
+outcome correlation in the block is conditional on the treatment, whereas
+the ITCV is stated in correlations that are not. The two scales are close
+relatives, but a number from the block should not be compared with an ITCV
+as if they were the same quantity.
+
+## When the assumed strength is impossible
+
+An omitted variable cannot explain more variance than there is left to
+explain. If `kd` is so large that the implied partial R^2^ reaches 1,
+`sensemakr` cannot compute the adjusted estimate. In a bootstrap this can
+happen in some replications and not in others, because the strength of the
+benchmark is re-estimated in every bootstrap sample. `bootmakr` drops such
+replications and reports how many failed. A few failures are of no concern.
+Many of them mean that the assumed strength is near the limit of what the
+data allow, and that a smaller `kd` or a weaker benchmark is the more
+informative question to ask.
+
+## References
+
+Chen, G., Chittoor, R., & Vissa, B. (2021). Does nepotism run in the family?
+CEO pay and pay-performance sensitivity in Indian family firms. *Strategic
+Management Journal*, 42(7), 1326--1343. <https://doi.org/10.1002/smj.3263>
+
+Cinelli, C., & Hazlett, C. (2020). Making sense of sensitivity: Extending
+omitted variable bias. *Journal of the Royal Statistical Society: Series B*,
+82(1), 39--67. <https://doi.org/10.1111/rssb.12348>
+
+Lonati, S., & Wulff, J. N. (2026). *Why you should not use the ITCV with
+robust standard errors (and what to do instead)*. Working paper.
