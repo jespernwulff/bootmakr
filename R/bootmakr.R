@@ -1,23 +1,66 @@
 #' Bootstrap Inference for Sensemakr Sensitivity Analysis
 #'
-#' Wraps \code{\link[sensemakr]{sensemakr}} in a bootstrap loop to produce
-#' bootstrap standard errors, percentile confidence intervals, and p-values
-#' for the bias-adjusted treatment effect.
+#' Wraps \code{\link[sensemakr]{sensemakr}} (Cinelli & Hazlett, 2020) in a
+#' bootstrap loop. For an omitted variable \code{kd} times as strong as an
+#' observed benchmark covariate, \code{bootmakr()} computes the bias-adjusted
+#' estimate of the treatment coefficient and obtains its standard error,
+#' confidence interval and p-value by simple, stratified or cluster bootstrap,
+#' so that inference does not rest on the conventional OLS variance formula.
 #'
-#' @param formula A formula for the OLS regression.
+#' @details
+#' In every replication the data are resampled (rows, whole clusters, or
+#' within strata), the regression is refitted, and the benchmark bounds and
+#' the bias-adjusted estimate are recomputed. The bootstrap distribution
+#' therefore reflects sampling uncertainty in the regression coefficient
+#' \emph{and} in the estimated strength of the benchmark. The standard error
+#' is the standard deviation of that distribution, the confidence interval
+#' its percentile interval, and the p-value is twice the smaller of the
+#' shares of replications at or below zero and at or above zero.
+#'
+#' With a length-two \code{cluster}, three bootstraps are combined with the
+#' Cameron, Gelbach & Miller (2011) subtractive variance estimator, and the
+#' confidence interval and p-value use a normal approximation.
+#'
+#' Below the table of adjusted estimates, the print method reports the
+#' \strong{benchmark strength}: the partial R2 of the benchmark with the
+#' treatment (given the other covariates) and with the outcome (given the
+#' treatment and the covariates), and sensemakr's implied bound on the
+#' omitted variable at each \code{kd}, together with their square roots
+#' (absolute partial correlations). These are functions of the data alone.
+#' No standard error enters them, so they do not depend on the variance
+#' estimator. They are stored in \code{$benchmark_strength}.
+#'
+#' @param formula A formula for the OLS regression: outcome on the left,
+#'   treatment and covariates on the right.
 #' @param data A data frame.
-#' @param treat Character: treatment variable name.
-#' @param benchmark_covariates Character vector: individual benchmark covariates.
-#' @param gbenchmark_covariates Character vector: grouped benchmark covariates.
-#'   Uses \code{group_partial_r2} to compute joint R2 values.
-#' @param kd,ky Numeric vectors of benchmark multipliers. \code{ky} defaults to \code{kd}.
-#' @param q,alpha Numeric: proportion of effect / significance level.
-#' @param r2dz.x,r2yz.dx Optional manual R2 values (skip benchmark computation).
+#' @param treat Character: name of the treatment variable (the coefficient
+#'   whose sensitivity is assessed).
+#' @param benchmark_covariates Character vector: observed covariate(s) used as
+#'   benchmark for the strength of the omitted variable. If several are
+#'   supplied, the adjusted estimates refer to the first one.
+#' @param gbenchmark_covariates Character vector: a group of covariates used
+#'   jointly as benchmark. Uses \code{group_partial_r2} to compute joint R2
+#'   values.
+#' @param kd,ky Numeric vectors of benchmark multipliers: the omitted variable
+#'   is assumed \code{kd} times as strong as the benchmark in explaining the
+#'   treatment and \code{ky} times as strong in explaining the outcome.
+#'   \code{kd} defaults to 1 (exactly as strong as the benchmark) and
+#'   \code{ky} to \code{kd}. A vector of several values gives one row of
+#'   results per value (a "kd sweep").
+#' @param q,alpha Numeric: proportion of the effect to be explained away
+#'   (passed to sensemakr) and significance level of the bootstrap confidence
+#'   interval (default 0.05).
+#' @param r2dz.x,r2yz.dx Optional manual partial R2 values of the omitted
+#'   variable with the treatment and with the outcome (instead of a
+#'   benchmark).
 #' @param bound_label Character label for bounds table.
-#' @param reduce Logical: bias-reducing confounders (default TRUE).
-#' @param bounds_row Integer: which row of bounds table (default 1).
+#' @param reduce Logical: should the omitted variable reduce the absolute
+#'   value of the estimate (default \code{TRUE})?
+#' @param bounds_row Integer: which row of sensemakr's bounds table to use
+#'   when a single \code{kd} is supplied (default 1).
 #' @param reps Integer: bootstrap replications (default 1000).
-#' @param seed Integer or NULL.
+#' @param seed Integer or \code{NULL}. No seed is set unless one is supplied,
+#'   so results vary from run to run without it.
 #' @param cluster Column name(s) or vector for the cluster bootstrap.
 #'   Length 1 (e.g. \code{"firm"}) gives a one-way cluster bootstrap with
 #'   percentile CIs. Length 2 (e.g. \code{c("firm", "year")}) triggers a
@@ -27,17 +70,82 @@
 #'   \code{V = V_G + V_H - V_(G n H)}. CIs and p-values for the two-way case
 #'   use a normal approximation \code{estimate +/- z * SE}. Two-way clustering
 #'   is incompatible with \code{strata}.
-#' @param strata,weights Column name or vector.
+#' @param strata,weights Column name or vector: strata for a stratified
+#'   bootstrap, and regression weights.
 #' @param dots Deprecated; use \code{progress} instead.
 #' @param progress Logical: show a progress bar (default TRUE).
-#' @param converge TRUE, FALSE, or list(minreps, stepsize, threshold).
-#' @param verbose Logical.
-#' @return Object of class \code{"bootmakr"}.
+#' @param converge \code{TRUE}, \code{FALSE}, or
+#'   \code{list(minreps, stepsize, threshold)}: an informal convergence check
+#'   that recomputes the standard error and p-value on the first
+#'   \code{minreps}, \code{minreps + stepsize}, ... replications and
+#'   summarises how much they still move, overall and from \code{threshold}
+#'   replications onwards.
+#' @param verbose Logical; currently unused.
+#' @return An object of class \code{"bootmakr"}, a list with (among others)
+#'   \describe{
+#'     \item{\code{results}}{data frame with one row per \code{kd}: adjusted
+#'       \code{estimate}, bootstrap \code{se}, \code{ci_lower},
+#'       \code{ci_upper}, \code{pvalue}, and the implied strength of the
+#'       omitted variable (\code{r2dz.x}, \code{r2yz.dx}) the row is based
+#'       on.}
+#'     \item{\code{benchmark_strength}}{list with \code{$observed} (partial
+#'       R2 of the benchmark with treatment and outcome, and their square
+#'       roots) and \code{$implied} (sensemakr's bound on the omitted
+#'       variable at each \code{kd}/\code{ky}, and the corresponding
+#'       absolute partial correlations).}
+#'     \item{\code{boot_samples}}{matrix of bootstrap draws of the adjusted
+#'       estimate, one column per \code{kd} (a list of three such matrices
+#'       with two-way clustering).}
+#'     \item{\code{convergence}}{convergence diagnostics, if requested.}
+#'     \item{\code{N}, \code{N_reps}, \code{N_successful}, \code{N_fail},
+#'       \code{N_clust}}{sample size, replications requested, completed and
+#'       failed, and number of clusters.}
+#'     \item{\code{sensemakr_orig}}{the \code{sensemakr} object of the
+#'       original fit.}
+#'   }
+#'   Use \code{print()} for the results table and \code{plot()} for the
+#'   kd-sweep, convergence and histogram plots.
 #'
-#' @importFrom sensemakr sensemakr group_partial_r2 ovb_partial_r2_bound adjusted_estimate
+#' @references
+#' Cameron, A. C., Gelbach, J. B., & Miller, D. L. (2011). Robust inference
+#' with multiway clustering. \emph{Journal of Business & Economic
+#' Statistics}, 29(2), 238-249.
+#'
+#' Cinelli, C., & Hazlett, C. (2020). Making sense of sensitivity: Extending
+#' omitted variable bias. \emph{Journal of the Royal Statistical Society:
+#' Series B}, 82(1), 39-67.
+#'
+#' Cinelli, C., Ferwerda, J., & Hazlett, C. (2024). sensemakr: Sensitivity
+#' analysis tools for OLS in R and Stata. \emph{Observational Studies},
+#' 10(2), 93-127.
+#'
+#' Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
+#' robust standard errors (and what to do instead). Working paper.
+#'
+#' @seealso \code{\link{print.bootmakr}}, \code{\link{plot.bootmakr}},
+#'   \code{\link[sensemakr]{sensemakr}}
+#'
+#' @examples
+#' data("darfur", package = "sensemakr")
+#'
+#' # An omitted variable as strong as `female` (kd = 1, the default);
+#' # villages are resampled as whole clusters.
+#' out <- bootmakr(
+#'   peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+#'     pastvoted + hhsize_darfur + female + village,
+#'   data = darfur, treat = "directlyharmed",
+#'   benchmark_covariates = "female",
+#'   cluster = "village", reps = 200, seed = 1, progress = FALSE
+#' )
+#' out
+#'
+#' # Benchmark strength on the partial-R2 and partial-correlation scales
+#' out$benchmark_strength
+#'
+#' @importFrom sensemakr sensemakr group_partial_r2 ovb_partial_r2_bound adjusted_estimate partial_r2 ovb_bounds
 #' @importFrom grDevices adjustcolor
 #' @importFrom graphics abline hist legend mtext par plot points segments
-#' @importFrom stats complete.cases lm nobs pnorm qnorm quantile reformulate sd terms var
+#' @importFrom stats complete.cases lm model.matrix nobs pnorm qnorm quantile reformulate sd terms var
 #' @importFrom utils setTxtProgressBar txtProgressBar
 #'
 #' @export
@@ -120,6 +228,16 @@ bootmakr <- function(formula,
     kd, ky, q, alpha, r2dz.x, r2yz.dx, bound_label, reduce
   )
 
+  # ---- Benchmark strength (descriptive; no standard errors involved) ----
+  # Partial R2 of the benchmark with treatment and outcome, and sensemakr's
+  # implied omitted-variable strength at each kd/ky. Computed once on the
+  # full sample; not part of the bootstrap loop and draws no random numbers.
+  bench_strength <- .benchmark_strength(
+    fit_orig, data, formula, treat, weight_vec,
+    benchmark_covariates, gbenchmark_covariates,
+    kd, ky, r2dz.x, r2yz.dx, bound_label
+  )
+
   # ---- Set up resampling ----
   if (is_twoway) {
     intersection_vec <- paste(cluster_list[[1]], cluster_list[[2]], sep = "_._")
@@ -183,6 +301,7 @@ bootmakr <- function(formula,
     n_clust      <- resample_info$n_clust
     method       <- "percentile"
   }
+  results <- .attach_r2(results, bench_strength, n_kd)
 
   conv_out <- NULL
   if (conv_opts$do_converge) {
@@ -213,6 +332,7 @@ bootmakr <- function(formula,
       benchmark_covariates  = benchmark_covariates,
       gbenchmark_covariates = gbenchmark_covariates,
       bench_label   = bench_label,
+      benchmark_strength = bench_strength,
       sensemakr_orig = sm_orig
     ),
     class = "bootmakr"
@@ -234,20 +354,11 @@ bootmakr <- function(formula,
 
   if (!is.null(gbenchmark_covariates)) {
     # ---- Grouped benchmark pathway ----
-    # 1. Partial R2 of Y with Z_group given D, X  (from the outcome model)
-    r2yxj_base <- sensemakr::group_partial_r2(fit, covariates = gbenchmark_covariates)
-
-    # 2. Partial R2 of D with Z_group given X  (from a treatment model)
-    #    Build formula: treat ~ all other RHS variables
-    rhs_vars <- attr(terms(formula), "term.labels")
-    rhs_no_treat <- setdiff(rhs_vars, treat)
-    treat_formula <- reformulate(rhs_no_treat, response = treat)
-    fit_d <- if (is.null(weight_vec)) {
-      lm(treat_formula, data = data)
-    } else {
-      lm(treat_formula, data = data, weights = weight_vec)
-    }
-    r2dxj_base <- sensemakr::group_partial_r2(fit_d, covariates = gbenchmark_covariates)
+    # 1.-2. Partial R2 of Y with Z_group given D, X (outcome model) and of
+    #       D with Z_group given X (treatment model) -- see .group_base_r2()
+    base <- .group_base_r2(fit, data, formula, treat, weight_vec, gbenchmark_covariates)
+    r2yxj_base <- base$r2yxj.dx
+    r2dxj_base <- base$r2dxj.x
 
     # 3. For each kd/ky, use ovb_partial_r2_bound for proper nonlinear scaling,
     #    then compute adjusted estimate with the scaled R2 values
@@ -308,6 +419,182 @@ bootmakr <- function(formula,
   if (!is.null(bound_label)) args$bound_label <- bound_label
   args$reduce <- reduce
   tryCatch(do.call(sensemakr::sensemakr, args), error = function(e) NULL)
+}
+
+
+# ==============================================================================
+# Benchmark strength (descriptive)
+# ==============================================================================
+
+#' Group partial R2s of a set of benchmark covariates: with the outcome given
+#' treatment and the other covariates (r2yxj.dx, from the outcome model) and
+#' with the treatment given the other covariates (r2dxj.x, from a treatment
+#' model treat ~ all other RHS terms). Shared by the bootstrap pathway and the
+#' descriptive block so that both report the same numbers.
+#' @noRd
+.group_base_r2 <- function(fit, data, formula, treat, weight_vec, gbenchmark_covariates) {
+  r2yxj.dx <- sensemakr::group_partial_r2(fit, covariates = gbenchmark_covariates)
+  rhs_vars     <- attr(terms(formula), "term.labels")
+  rhs_no_treat <- setdiff(rhs_vars, treat)
+  treat_formula <- reformulate(rhs_no_treat, response = treat)
+  fit_d <- if (is.null(weight_vec)) {
+    lm(treat_formula, data = data)
+  } else {
+    lm(treat_formula, data = data, weights = weight_vec)
+  }
+  r2dxj.x <- sensemakr::group_partial_r2(fit_d, covariates = gbenchmark_covariates)
+  list(r2dxj.x = unname(r2dxj.x), r2yxj.dx = unname(r2yxj.dx))
+}
+
+#' Treatment model exactly as sensemakr's benchmarking routine builds it
+#' (model matrix of the outcome model, treatment regressed on all other
+#' columns, no intercept beyond the model-matrix constant, unweighted).
+#' @noRd
+.treatment_model_sm <- function(fit, treat) {
+  m  <- model.matrix(fit)
+  d  <- m[, treat]
+  XX <- m[, !(colnames(m) %in% treat), drop = FALSE]
+  lm(d ~ XX + 0)
+}
+
+#' Descriptive benchmark strength.
+#'
+#' Returns a list with
+#'   $type      "single" (benchmark_covariates), "group" (gbenchmark_covariates),
+#'              "manual" (r2dz.x + r2yz.dx supplied) or "unavailable"
+#'   $observed  data.frame, one row per benchmark covariate (or one row for the
+#'              group): r2dxj.x, r2yxj.dx and their square roots r_dxj.x,
+#'              r_yxj.dx (absolute partial correlations). NULL for "manual".
+#'   $implied   data.frame, one row per benchmark x kd: kd, ky, r2dz.x, r2yz.dx
+#'              (sensemakr's bound on the omitted variable's strength) and
+#'              their square roots r_dz.x, r_yz.dx.
+#' All quantities are functions of the data alone (no standard errors), so
+#' they are unaffected by heteroskedasticity- or cluster-robust inference.
+#' Nothing here is a t-implied correlation or a threshold.
+#' @noRd
+.benchmark_strength <- function(fit, data, formula, treat, weight_vec,
+                                benchmark_covariates, gbenchmark_covariates,
+                                kd, ky, r2dz.x, r2yz.dx, bound_label) {
+  n_kd <- length(kd)
+  out  <- tryCatch({
+    if (!is.null(gbenchmark_covariates)) {
+      base  <- .group_base_r2(fit, data, formula, treat, weight_vec, gbenchmark_covariates)
+      label <- paste(gbenchmark_covariates, collapse = " + ")
+      observed <- data.frame(benchmark = label,
+                             r2dxj.x = base$r2dxj.x, r2yxj.dx = base$r2yxj.dx,
+                             stringsAsFactors = FALSE)
+      implied <- do.call(rbind, lapply(seq_len(n_kd), function(i) {
+        b <- sensemakr::ovb_partial_r2_bound(
+          r2dxj.x = base$r2dxj.x, r2yxj.dx = base$r2yxj.dx,
+          kd = kd[i], ky = ky[i], bound_label = "group"
+        )
+        data.frame(benchmark = label, kd = kd[i], ky = ky[i],
+                   r2dz.x = b$r2dz.x, r2yz.dx = b$r2yz.dx,
+                   stringsAsFactors = FALSE)
+      }))
+      list(type = "group", observed = observed, implied = implied)
+    } else if (!is.null(benchmark_covariates)) {
+      # Observed strength, computed as in sensemakr's benchmarking routine
+      r2yxj.dx <- sensemakr::partial_r2(fit, covariates = benchmark_covariates)
+      tm       <- .treatment_model_sm(fit, treat)
+      r2dxj.x  <- sensemakr::partial_r2(tm, covariates = paste0("XX", benchmark_covariates))
+      observed <- data.frame(benchmark = benchmark_covariates,
+                             r2dxj.x = unname(r2dxj.x), r2yxj.dx = unname(r2yxj.dx),
+                             stringsAsFactors = FALSE)
+      # Implied strength of the omitted variable: sensemakr's own bounds
+      # (rows ordered benchmark-by-benchmark, kd within benchmark -- the same
+      # order used for the adjusted estimates)
+      bnds <- sensemakr::ovb_bounds(fit, treatment = treat,
+                                    benchmark_covariates = benchmark_covariates,
+                                    kd = kd, ky = ky, adjusted_estimates = FALSE)
+      n_b  <- length(benchmark_covariates)
+      implied <- data.frame(benchmark = rep(benchmark_covariates, each = n_kd),
+                            kd = rep(kd, times = n_b), ky = rep(ky, times = n_b),
+                            r2dz.x = bnds$r2dz.x, r2yz.dx = bnds$r2yz.dx,
+                            stringsAsFactors = FALSE)
+      list(type = "single", observed = observed, implied = implied)
+    } else {
+      implied <- data.frame(benchmark = bound_label %||% "manual",
+                            kd = NA_real_, ky = NA_real_,
+                            r2dz.x = r2dz.x, r2yz.dx = r2yz.dx,
+                            stringsAsFactors = FALSE)
+      list(type = "manual", observed = NULL, implied = implied)
+    }
+  }, error = function(e) list(type = "unavailable", observed = NULL, implied = NULL,
+                              error = conditionMessage(e)))
+
+  if (!is.null(out$implied)) {
+    out$implied$r_dz.x  <- sqrt(out$implied$r2dz.x)
+    out$implied$r_yz.dx <- sqrt(out$implied$r2yz.dx)
+    rownames(out$implied) <- NULL
+  }
+  if (!is.null(out$observed)) {
+    out$observed$r_dxj.x  <- sqrt(out$observed$r2dxj.x)
+    out$observed$r_yxj.dx <- sqrt(out$observed$r2yxj.dx)
+    rownames(out$observed) <- NULL
+  }
+  out
+}
+
+#' Attach the implied r2dz.x / r2yz.dx of each kd row to the results table
+#' (first benchmark's rows, matching the adjusted estimates).
+#' @noRd
+.attach_r2 <- function(results, bs, n_kd) {
+  results$r2dz.x  <- NA_real_
+  results$r2yz.dx <- NA_real_
+  imp <- bs$implied
+  if (is.null(imp) || nrow(imp) == 0) return(results)
+  if (identical(bs$type, "manual")) {
+    results$r2dz.x  <- imp$r2dz.x[1]
+    results$r2yz.dx <- imp$r2yz.dx[1]
+  } else if (nrow(imp) >= n_kd) {
+    results$r2dz.x  <- imp$r2dz.x[seq_len(n_kd)]
+    results$r2yz.dx <- imp$r2yz.dx[seq_len(n_kd)]
+  }
+  results
+}
+
+#' Print the descriptive benchmark-strength block.
+#' @noRd
+.print_benchmark_strength <- function(bs) {
+  if (is.null(bs)) return(invisible(NULL))
+  cat("\nBenchmark strength (descriptive: computed from the data, no standard errors involved)\n")
+  if (identical(bs$type, "unavailable")) {
+    cat(sprintf("  not available: %s\n", bs$error))
+    return(invisible(NULL))
+  }
+  f4 <- function(v) ifelse(is.na(v), "   .", formatC(v, format = "f", digits = 4))
+  f3 <- function(v) ifelse(is.na(v), "   .", formatC(v, format = "f", digits = 3))
+  f2 <- function(v) ifelse(is.na(v), "   .", formatC(v, format = "f", digits = 2))
+
+  ob <- bs$observed
+  if (!is.null(ob) && nrow(ob) > 0) {
+    rows <- unlist(lapply(seq_len(nrow(ob)), function(i) c(
+      sprintf("%s with treatment | X", ob$benchmark[i]),
+      sprintf("%s with outcome | D, X", ob$benchmark[i]))))
+    r2   <- unlist(lapply(seq_len(nrow(ob)), function(i) c(ob$r2dxj.x[i], ob$r2yxj.dx[i])))
+    tab  <- data.frame(`Partial R2` = f4(r2), `|Partial r|` = f3(sqrt(r2)),
+                       check.names = FALSE, stringsAsFactors = FALSE)
+    rownames(tab) <- rows
+    print(tab, right = TRUE, quote = FALSE)
+  }
+
+  imp <- bs$implied
+  if (!is.null(imp) && nrow(imp) > 0) {
+    cat("Implied strength of the omitted variable (sensemakr bounds):\n")
+    tab2 <- data.frame(kd = f2(imp$kd), ky = f2(imp$ky),
+                       `R2dz.x` = f4(imp$r2dz.x), `R2yz.dx` = f4(imp$r2yz.dx),
+                       `|r_dz.x|` = f3(imp$r_dz.x), `|r_yz.dx|` = f3(imp$r_yz.dx),
+                       check.names = FALSE, stringsAsFactors = FALSE)
+    rownames(tab2) <- if (identical(bs$type, "manual")) imp$benchmark else
+      make.unique(sprintf("%sx %s", f2(imp$kd), imp$benchmark), sep = " #")
+    print(tab2, right = TRUE, quote = FALSE)
+  }
+  cat("(R2dz.x, R2yz.dx: partial R2 of the omitted variable with the treatment given the\n",
+      "covariates, and with the outcome given treatment and covariates; |r| = square root,\n",
+      "i.e. the partial-correlation scale of the ITCV. Descriptive only: independent of the\n",
+      "variance estimator. No t-implied correlation or threshold is reported.)\n", sep = " ")
+  invisible(NULL)
 }
 
 
@@ -626,6 +913,18 @@ bootmakr <- function(formula,
 # Print method
 # ==============================================================================
 
+#' Print a bootmakr object
+#'
+#' Prints the table of bias-adjusted estimates with bootstrap standard
+#' errors, confidence intervals and p-values (one row per \code{kd}),
+#' followed by the descriptive benchmark-strength block and, if requested,
+#' the convergence diagnostics.
+#'
+#' @param x An object of class \code{"bootmakr"}, as returned by
+#'   \code{\link{bootmakr}}.
+#' @param ... Ignored.
+#' @return \code{x}, invisibly.
+#' @seealso \code{\link{bootmakr}}, \code{\link{plot.bootmakr}}
 #' @export
 print.bootmakr <- function(x, ...) {
   cat("\nCall:\n"); print(x$call)
@@ -699,6 +998,8 @@ print.bootmakr <- function(x, ...) {
                 x$N_fail, if (is_twoway) 3L * x$N_reps else x$N_reps,
                 if (is_twoway) " (summed across the 3 sub-bootstraps)" else ""))
 
+  .print_benchmark_strength(x$benchmark_strength)
+
   if (!is.null(x$convergence)) .print_convergence(x$convergence)
   invisible(x)
 }
@@ -728,6 +1029,30 @@ print.bootmakr <- function(x, ...) {
 # Plot method
 # ==============================================================================
 
+#' Plot a bootmakr object
+#'
+#' @param x An object of class \code{"bootmakr"}, as returned by
+#'   \code{\link{bootmakr}}.
+#' @param type Which plot to draw:
+#'   \describe{
+#'     \item{\code{"kd_sweep"}}{adjusted estimate and bootstrap confidence
+#'       interval at each \code{kd}; solid markers are significant at
+#'       \code{alpha}, hollow markers are not. Shows the "breakdown point"
+#'       at which the estimate stops being statistically significant.}
+#'     \item{\code{"convergence"}}{three panels: the bootstrap distribution,
+#'       and the standard error and p-value as functions of the number of
+#'       replications (requires \code{converge} in the call to
+#'       \code{bootmakr()}).}
+#'     \item{\code{"histogram"}}{the bootstrap distribution of the adjusted
+#'       estimate with the original estimate marked.}
+#'     \item{\code{"auto"}}{(default) \code{"convergence"} if diagnostics
+#'       are available, otherwise \code{"kd_sweep"} if several \code{kd}
+#'       values were used, otherwise \code{"histogram"}.}
+#'   }
+#' @param ... Further arguments; for \code{type = "histogram"},
+#'   \code{kd_idx} selects which \code{kd} value to show (default 1).
+#' @return \code{x}, invisibly.
+#' @seealso \code{\link{bootmakr}}, \code{\link{print.bootmakr}}
 #' @export
 plot.bootmakr <- function(x, type = c("auto", "kd_sweep", "convergence", "histogram"), ...) {
   type <- match.arg(type)
