@@ -1,0 +1,177 @@
+
+. 
+end of do-file
+
+. 
+. * >>> setup
+. use "CEO pay project - Data for sharing FINAL.dta", clear
+
+. 
+. global controls "ceo_tenure PA_nic3_med ceo_edu_dummy lg_sales firm_age promoters_pct institutions_pct i.year i.nic_co
+> de_1digit"
+
+. * <<<
+. 
+. * >>> model2
+. quietly regress lg_ceopay owner_ceo $controls
+
+. lincom owner_ceo
+
+ ( 1)  owner_ceo = 0
+
+------------------------------------------------------------------------------
+   lg_ceopay | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+         (1) |   .3269285   .0521019     6.27   0.000     .2247483    .4291086
+------------------------------------------------------------------------------
+
+. 
+. quietly regress lg_ceopay owner_ceo $controls, vce(cluster co_code)
+
+. lincom owner_ceo
+
+ ( 1)  owner_ceo = 0
+
+------------------------------------------------------------------------------
+   lg_ceopay | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+         (1) |   .3269285   .1018931     3.21   0.001      .126342    .5275149
+------------------------------------------------------------------------------
+
+. * <<<
+. 
+. tic
+
+. * >>> kd1
+. bootmakr lg_ceopay owner_ceo $controls, ///
+>     treat(owner_ceo) benchmark(ceo_tenure) cluster(co_code) ///
+>     reps(10000) seed(912323)
+
+Bootstrap results                               Number of obs     =     2,011
+                                                Replications      =    10,000
+
+                 (Replications based on 277 clusters in co_code)
+------------------------------------------------------------------------------
+             |      Observed    Bootstrap                    Percentile
+             |       Coef.      Std. Err.    P-value    [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+owner_ceo    |     .254114      .1278125      0.0600    -.0110033    .4866132
+------------------------------------------------------------------------------
+Note: CI is percentile bootstrap confidence interval
+      P-value is bootstrap p-value (H0: owner_ceo = 0)
+      Benchmark: ceo_tenure, kd = 1, ky = 1
+
+Benchmark strength (descriptive; no standard errors involved)
+------------------------------------------------------------------------------
+Benchmark: ceo_tenure
+                                                 Partial R2    |Partial corr.|
+  with owner_ceo | X                                 0.1447             0.380
+  with lg_ceopay | owner_ceo, X                      0.0034             0.059
+------------------------------------------------------------------------------
+Implied strength of the omitted variable (sensemakr bounds):
+     kd      ky      R2dz.x     R2yz.dx    |r_dz.x|   |r_yz.dx|
+   1.00    1.00       0.1691     0.0048      0.411      0.070
+------------------------------------------------------------------------------
+Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
+      treatment given the covariates (with the outcome given treatment
+      and covariates). |r| = square root, i.e. the partial-correlation
+      scale of the ITCV. Descriptive only: no t-implied correlation or
+      threshold is reported.
+
+. * <<<
+. keep_result kd1
+
+. 
+. * >>> kd1-stored
+. return list
+
+scalars:
+            r(r2yz_dx) =  .004836675927156
+             r(r2dz_x) =  .1691147007051809
+           r(r2yxj_dx) =  .0034256315985701
+            r(r2dxj_x) =  .1446519324435639
+                  r(p) =  .06
+           r(ci_upper) =  .4866131991147995
+           r(ci_lower) =  -.0110033294185996
+                 r(se) =  .1278125430793387
+           r(estimate) =  .2541139552880977
+            r(N_clust) =  277
+       r(N_successful) =  10000
+             r(N_reps) =  10000
+                  r(N) =  2011
+
+matrices:
+      r(ci_percentile) :  2 x 1
+  r(benchmark_strengt
+    h)                 :  1 x 6
+
+. * <<<
+. toc kd1
+
+. 
+. tic
+
+. * >>> kd05
+. bootmakr lg_ceopay owner_ceo $controls, ///
+>     treat(owner_ceo) benchmark(ceo_tenure) kd(0.5) cluster(co_code) ///
+>     reps(10000) seed(912323)
+
+Bootstrap results                               Number of obs     =     2,011
+                                                Replications      =    10,000
+
+                 (Replications based on 277 clusters in co_code)
+------------------------------------------------------------------------------
+             |      Observed    Bootstrap                    Percentile
+             |       Coef.      Std. Err.    P-value    [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+owner_ceo    |    .2927133      .1121849      0.0100     .0723644    .5121048
+------------------------------------------------------------------------------
+Note: CI is percentile bootstrap confidence interval
+      P-value is bootstrap p-value (H0: owner_ceo = 0)
+      Benchmark: ceo_tenure, kd = .5, ky = .5
+
+Benchmark strength (descriptive; no standard errors involved)
+------------------------------------------------------------------------------
+Benchmark: ceo_tenure
+                                                 Partial R2    |Partial corr.|
+  with owner_ceo | X                                 0.1447             0.380
+  with lg_ceopay | owner_ceo, X                      0.0034             0.059
+------------------------------------------------------------------------------
+Implied strength of the omitted variable (sensemakr bounds):
+     kd      ky      R2dz.x     R2yz.dx    |r_dz.x|   |r_yz.dx|
+   0.50    0.50       0.0846     0.0024      0.291      0.049
+------------------------------------------------------------------------------
+Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
+      treatment given the covariates (with the outcome given treatment
+      and covariates). |r| = square root, i.e. the partial-correlation
+      scale of the ITCV. Descriptive only: no t-implied correlation or
+      threshold is reported.
+
+. * <<<
+. keep_result kd05
+
+. toc kd05
+
+. 
+. tic
+
+. * >>> seeds
+. foreach s in 101 202 303 404 {
+  2.     quietly bootmakr lg_ceopay owner_ceo $controls, ///
+>         treat(owner_ceo) benchmark(ceo_tenure) cluster(co_code) seed(`s')
+  3.     display "seed `s':  p = " %5.3f r(p) "   95% CI [" %6.3f r(ci_lower) ", " %5.3f r(ci_upper) "]"
+  4. }
+seed 101:  p = 0.046   95% CI [ 0.002, 0.474]
+seed 202:  p = 0.060   95% CI [-0.017, 0.500]
+seed 303:  p = 0.058   95% CI [-0.008, 0.469]
+seed 404:  p = 0.058   95% CI [-0.011, 0.485]
+
+. * <<<
+. toc seeds4x1000
+
+. 
+. file close res
+
+. file close tim
+
+. log close pc

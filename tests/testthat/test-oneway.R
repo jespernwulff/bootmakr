@@ -42,3 +42,20 @@ test_that("kd sweep yields one row per kd", {
   expect_equal(nrow(out$results), 3L)
   expect_equal(out$results$kd, c(0.5, 1, 1.5))
 })
+
+test_that("replication counts of 10,000 and more print as integers", {
+  skip_helper()
+  out <- bootmakr(
+    peacefactor ~ directlyharmed + female,
+    data    = darfur_data,
+    treat   = "directlyharmed",
+    benchmark_covariates = "female",
+    reps    = 20,
+    seed    = 7,
+    progress = FALSE
+  )
+  out$N_reps <- 10000
+  txt <- capture.output(print(out))
+  expect_true(any(grepl("(10,000 reps", txt, fixed = TRUE)))
+  expect_false(any(grepl("1e+04", txt, fixed = TRUE)))
+})

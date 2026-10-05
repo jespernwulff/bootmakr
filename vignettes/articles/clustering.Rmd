@@ -1,0 +1,266 @@
+---
+title: "Clustered and stratified data"
+description: >
+  How to choose what the bootstrap resamples: observations, clusters, two
+  cluster dimensions, or units within strata.
+---
+
+<!-- Generated from clustering.Rmd.orig by precompute/precompile.R. Edit the .orig file, not this one. -->
+
+
+
+`bootmakr` obtains its standard errors, confidence intervals and *p*-values
+by resampling the data. What it resamples is your decision, and it should
+follow one rule: **resample the units that you would treat as independent
+when choosing standard errors for the regression itself.** If you would
+cluster the standard errors by firm, resample firms.
+
+| Your regression would use | Resample | R | Stata |
+|---|---|---|---|
+| heteroskedasticity-robust standard errors | observations | *(nothing to add)* | *(nothing to add)* |
+| standard errors clustered in one dimension | whole clusters | `cluster = "firm"` | `cluster(firm)` |
+| standard errors clustered in two dimensions | each dimension and their intersection | `cluster = c("firm", "year")` | not available |
+| a stratified sample | within strata | `strata = "region"` | `strata(region)` |
+| clusters sampled within strata | clusters within strata | `cluster = "firm", strata = "region"` | `cluster(firm) strata(region)` |
+
+## Observations or clusters
+
+Without `cluster`, each bootstrap sample draws observations with
+replacement. This allows the error variance to differ across observations,
+the bootstrap counterpart of heteroskedasticity-robust standard errors. It
+still assumes that observations are independent.
+
+When observations come in groups (employees in firms, firm-years in firms,
+respondents in villages), that assumption fails, and the bootstrap must draw
+whole groups. The example of [Get started](bootmakr.html) shows what is at
+stake. The data are firm-years, about seven per firm, and whether the CEO
+belongs to the owning family varies mostly between firms rather than within
+them. Here is the same call twice, once resampling firm-years and once
+resampling firms.
+
+<div class="lang-tabs">
+<ul class="nav nav-tabs" role="tablist">
+<li class="nav-item" role="presentation"><button class="nav-link active" id="compare-r-tab" data-bs-toggle="tab" data-bs-target="#compare-r" type="button" role="tab" aria-controls="compare-r" aria-selected="true" data-lang="r">R</button></li>
+<li class="nav-item" role="presentation"><button class="nav-link" id="compare-stata-tab" data-bs-toggle="tab" data-bs-target="#compare-stata" type="button" role="tab" aria-controls="compare-stata" aria-selected="false" data-lang="stata">Stata</button></li>
+</ul>
+<div class="tab-content">
+<div class="tab-pane active" id="compare-r" role="tabpanel" aria-labelledby="compare-r-tab">
+
+
+``` r
+library(bootmakr)
+library(haven)
+
+osf  <- "https://osf.io/download/stk7y/?view_only=885d1ed5498c4b3c8a1194882e468286"
+chen <- read_dta(osf)
+
+ceo.model <- lg_ceopay ~ owner_ceo + ceo_tenure + PA_nic3_med + ceo_edu_dummy +
+  lg_sales + firm_age + promoters_pct + institutions_pct +
+  factor(year) + factor(nic_code_1digit)
+
+by.firm.year <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+                         benchmark_covariates = "firm_age",
+                         seed = 123, progress = FALSE)
+
+by.firm <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+                    benchmark_covariates = "firm_age", cluster = "co_code",
+                    seed = 123, progress = FALSE)
+
+rbind("firm-years" = by.firm.year$results,
+      "firms"      = by.firm$results)[, c("estimate", "se", "ci_lower", "ci_upper", "pvalue")]
+#>             estimate         se   ci_lower  ci_upper pvalue
+#> firm-years 0.3031863 0.04804267 0.20705034 0.3975676  0.000
+#> firms      0.3031863 0.10616636 0.07812096 0.4990174  0.006
+```
+
+</div>
+<div class="tab-pane" id="compare-stata" role="tabpanel" aria-labelledby="compare-stata-tab">
+
+```stata
+global osf "https://osf.io/download/stk7y/?view_only=885d1ed5498c4b3c8a1194882e468286"
+copy "$osf" "ceo_pay.dta", replace
+use "ceo_pay.dta", clear
+```
+
+```stata
+global controls "ceo_tenure PA_nic3_med ceo_edu_dummy lg_sales firm_age"
+global controls "$controls promoters_pct institutions_pct i.year i.nic_code_1digit"
+```
+
+```stata
+* firm-years resampled
+quietly bootmakr lg_ceopay owner_ceo $controls, ///
+    treat(owner_ceo) benchmark(firm_age) seed(123)
+display "firm-years:  se = " %6.4f r(se) "   95% CI [" %6.4f r(ci_lower) ", " %6.4f r(ci_upper) "]   p = " %5.3f r(p)
+
+* firms resampled
+quietly bootmakr lg_ceopay owner_ceo $controls, ///
+    treat(owner_ceo) benchmark(firm_age) cluster(co_code) seed(123)
+display "firms:       se = " %6.4f r(se) "   95% CI [" %6.4f r(ci_lower) ", " %6.4f r(ci_upper) "]   p = " %5.3f r(p)
+```
+
+```{.stata-output}
+firm-years:  se = 0.0480   95% CI [0.2036, 0.4000]   p = 0.000
+
+firms:       se = 0.1080   95% CI [0.0919, 0.5173]   p = 0.002
+```
+
+</div>
+</div>
+</div>
+
+
+
+The adjusted estimate is the same in both rows, because it is computed from
+the original sample. Only its uncertainty changes, and it changes a lot: the
+standard error is 0.048 when firm-years are resampled and
+0.106 when firms are, 2.2 times as
+large. Treating the firm-years as independent overstates how much
+information the data hold about family CEOs, in the bootstrap just as in the
+regression itself.
+
+The cluster bootstrap needs a reasonable number of clusters, just as
+cluster-robust standard errors do. The usual guidance is a few dozen at the
+least, and more when clusters differ much in size (Cameron & Miller, 2015).
+With few or very unequal clusters its confidence intervals can be too
+narrow, and no number of replications repairs that. The simulations in
+Lonati and Wulff (2026) document how coverage depends on the number and
+balance of clusters.
+
+## Two cluster dimensions
+
+Panel data are often clustered in two ways at once: observations of the same
+firm are related, and so are observations of the same year. In R, give
+`cluster` two variables. `bootmakr` then runs three bootstraps, one
+resampling each dimension and one resampling their intersection, and
+combines the three variances as V~firm~ + V~year~ − V~firm×year~, following
+Cameron, Gelbach, and Miller (2011).
+
+To see it at work we simulate a small panel in which both the treatment and
+the error term have a firm component and a year component.
+
+
+``` r
+set.seed(2026)
+firms <- 60
+years <- 25
+panel <- expand.grid(firm = seq_len(firms), year = seq_len(years))
+
+by.firm <- function() rnorm(firms)[panel$firm]
+by.year <- function() rnorm(years)[panel$year]
+
+panel$x <- rnorm(nrow(panel))
+panel$d <- 0.5 * panel$x + by.firm() + by.year() + rnorm(nrow(panel))
+panel$y <- 0.3 * panel$d + 0.5 * panel$x + by.firm() + by.year() + rnorm(nrow(panel))
+```
+
+
+``` r
+one.way <- bootmakr(y ~ d + x, data = panel, treat = "d",
+                    benchmark_covariates = "x", cluster = "firm",
+                    seed = 123, progress = FALSE)
+
+two.way <- bootmakr(y ~ d + x, data = panel, treat = "d",
+                    benchmark_covariates = "x", cluster = c("firm", "year"),
+                    seed = 123, progress = FALSE)
+two.way
+#> 
+#> Call:
+#> bootmakr(formula = y ~ d + x, data = panel, treat = "d", benchmark_covariates = "x", 
+#>     seed = 123, cluster = c("firm", "year"), progress = FALSE)
+#> 
+#> Bootstrap sensitivity analysis (1,000 reps per dimension, n = 1,500, two-way clusters: firm=60, year=25, intersection=1500)
+#> Benchmark: x | kd = 1, ky = 1
+#> 
+#> Adjusted estimates (normal-approx 95% CI):
+#>   Estimate Std. Err     2.5%    97.5% Pr(>|0|)   
+#> d 0.262590 0.080215 0.105371 0.419809  0.00106 **
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> (H0: adjusted estimate = 0; SE = sqrt(V_G + V_H - V_GH), CI = est +/- z*SE, p = 2*(1 - Phi(|z|)))
+#> 
+#> Benchmark strength (descriptive: computed from the data, no standard errors involved)
+#>                       Partial R2 |Partial r|
+#> x with treatment | X      0.1355       0.368
+#> x with outcome | D, X     0.0625       0.250
+#> Implied strength of the omitted variable (sensemakr bounds):
+#>           kd   ky R2dz.x R2yz.dx |r_dz.x| |r_yz.dx|
+#> 1.00x x 1.00 1.00 0.1567  0.0915    0.396     0.303
+#> (R2dz.x, R2yz.dx: partial R2 of the omitted variable with the treatment given the
+#>  covariates, and with the outcome given treatment and covariates; |r| = square root,
+#>  i.e. the partial-correlation scale of the ITCV. Descriptive only: independent of the
+#>  variance estimator. No t-implied correlation or threshold is reported.)
+```
+
+
+
+Clustering by firm alone gives a standard error of 0.070. Allowing
+for the year dimension as well raises it to 0.080.
+
+A few things differ from the one-way case.
+
+- The result is a variance, not a bootstrap distribution, so the confidence
+  interval and the *p*-value use a normal approximation (estimate ± 1.96
+  standard errors) instead of percentiles. The output says so.
+- `reps` is the number of replications *per* bootstrap, so the run does three
+  times the work.
+- The combined variance can come out negative in small samples. `bootmakr`
+  then falls back on the larger of the two one-way variances and tells you.
+- A dimension with very few clusters, such as five years, cannot support
+  cluster-robust inference of any kind. `bootmakr` warns when a dimension has
+  fewer than ten.
+- The draws of the three bootstraps are kept in `$boot_samples$G`, `$H` and
+  `$GH`.
+
+Two-way clustering cannot be combined with `strata`, and it is not available
+in the Stata command.
+
+## Strata
+
+If the sample was drawn separately within strata (regions, industries, size
+classes), the bootstrap should respect that: `strata` resamples within each
+stratum, so every bootstrap sample has the same number of units per stratum
+as the data. Combined with `cluster`, whole clusters are resampled within
+strata.
+
+<div class="lang-tabs">
+<ul class="nav nav-tabs" role="tablist">
+<li class="nav-item" role="presentation"><button class="nav-link active" id="strata-r-tab" data-bs-toggle="tab" data-bs-target="#strata-r" type="button" role="tab" aria-controls="strata-r" aria-selected="true" data-lang="r">R</button></li>
+<li class="nav-item" role="presentation"><button class="nav-link" id="strata-stata-tab" data-bs-toggle="tab" data-bs-target="#strata-stata" type="button" role="tab" aria-controls="strata-stata" aria-selected="false" data-lang="stata">Stata</button></li>
+</ul>
+<div class="tab-content">
+<div class="tab-pane active" id="strata-r" role="tabpanel" aria-labelledby="strata-r-tab">
+
+```r
+bootmakr(y ~ d + x1 + x2, data = dat, treat = "d",
+         benchmark_covariates = "x1",
+         cluster = "firm", strata = "region")
+```
+
+</div>
+<div class="tab-pane" id="strata-stata" role="tabpanel" aria-labelledby="strata-stata-tab">
+
+```stata
+bootmakr y d x1 x2, treat(d) benchmark(x1) cluster(firm) strata(region)
+```
+
+</div>
+</div>
+</div>
+
+## References
+
+Cameron, A. C., Gelbach, J. B., & Miller, D. L. (2011). Robust inference with
+multiway clustering. *Journal of Business & Economic Statistics*, 29(2),
+238--249. <https://doi.org/10.1198/jbes.2010.07136>
+
+Cameron, A. C., & Miller, D. L. (2015). A practitioner's guide to
+cluster-robust inference. *Journal of Human Resources*, 50(2), 317--372.
+<https://doi.org/10.3368/jhr.50.2.317>
+
+Chen, G., Chittoor, R., & Vissa, B. (2021). Does nepotism run in the family?
+CEO pay and pay-performance sensitivity in Indian family firms. *Strategic
+Management Journal*, 42(7), 1326--1343. <https://doi.org/10.1002/smj.3263>
+
+Lonati, S., & Wulff, J. N. (2026). *Why you should not use the ITCV with
+robust standard errors (and what to do instead)*. Working paper.

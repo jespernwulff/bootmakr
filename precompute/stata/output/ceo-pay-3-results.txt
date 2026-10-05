@@ -1,0 +1,2 @@
+label	kd	estimate	se	ci_lower	ci_upper	p	N	N_reps	N_successful
+converge	.	 .2541139553	 .1278328633	-.0141856545	 .4874145538	      .06235	        2011	       40000	       40000

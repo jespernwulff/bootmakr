@@ -1,0 +1,4 @@
+label	seconds
+kd1	    510.1
+kd05	    690.7
+seeds4x1000	    358.4

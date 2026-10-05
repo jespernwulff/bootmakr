@@ -3,7 +3,6 @@
 
 <!-- badges: start -->
 
-[![R-CMD-check](https://img.shields.io/badge/R--CMD--check-passing-brightgreen)](https://github.com/)
 [![License:
 MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 <!-- badges: end -->
@@ -11,12 +10,15 @@ MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/
 **Bootstrap inference for sensitivity analysis under omitted variable
 bias.**
 
+**Documentation, vignettes and a worked example in R and Stata:
+<https://jespernwulff.github.io/bootmakr/>**
+
 `bootmakr` wraps the
 [sensemakr](https://github.com/carloscinelli/sensemakr) package in a
 bootstrap loop, producing bootstrap standard errors, percentile
 confidence intervals, and *p*-values for the bias-adjusted treatment
-effect. It is the companion R package to the Stata command of the same
-name.
+effect. It is the companion R package to the [Stata command of the same
+name](https://github.com/jespernwulff/bootmakr-stata).
 
 ## Why bootstrap the sensitivity bounds?
 
@@ -31,8 +33,8 @@ so the CIs and *p*-values are robust to these complications.
 ## Installation
 
 ``` r
-# Install from GitHub (once published):
-# devtools::install_github("username/bootmakr")
+# install.packages("remotes")
+remotes::install_github("jespernwulff/bootmakr")
 ```
 
 ## Quick start
@@ -71,6 +73,13 @@ out
     #> ---
     #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     #> (H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)
+
+Since version 0.3.0 the printed result ends with a *benchmark strength*
+block: the partial R² of the benchmark with treatment and outcome, the
+strength of the omitted variable this implies, and the corresponding
+partial correlations. The block is left out of the listings on this
+page; see [How strong is the
+benchmark?](https://jespernwulff.github.io/bootmakr/articles/benchmark-strength.html)
 
 ## Sweeping across benchmark strengths
 
@@ -147,14 +156,14 @@ plot(out_cl, type = "kd_sweep")
 
 ## Two-way cluster bootstrap
 
-When errors are correlated along **two** non-nested dimensions (e.g. firms
-and years, or villages and survey waves), pass a length-two `cluster`
-vector. `bootmakr` then runs the Cameron, Gelbach & Miller (2011)
-subtractive variance estimator: three sub-bootstraps (one resampling each
-dimension, one resampling their intersection) combined as
-`V = V_G + V_H − V_{G∩H}`. Because the result is a variance rather than a
-bootstrap distribution, the CI and *p*-value use a normal approximation
-(`estimate ± z·SE`) instead of the percentile method:
+When errors are correlated along **two** non-nested dimensions
+(e.g. firms and years, or villages and survey waves), pass a length-two
+`cluster` vector. `bootmakr` then runs the Cameron, Gelbach & Miller
+(2011) subtractive variance estimator: three sub-bootstraps (one
+resampling each dimension, one resampling their intersection) combined
+as `V = V_G + V_H − V_{G∩H}`. Because the result is a variance rather
+than a bootstrap distribution, the CI and *p*-value use a normal
+approximation (`estimate ± z·SE`) instead of the percentile method:
 
 ``` r
 out_2w <- bootmakr(
@@ -304,8 +313,9 @@ quantile(draws, c(0.025, 0.5, 0.975))
 | `gbenchmark_covariates` | Grouped benchmark covariates (joint partial R²) |
 | `kd`, `ky` | Benchmark strength multipliers (`ky` defaults to `kd`) |
 | `reps`, `seed` | Number of bootstrap replications and random seed |
-| `cluster` | Cluster identifier(s). Length 1 → one-way cluster bootstrap with percentile CIs. Length 2 (e.g. `c("firm", "year")`) → two-way CGM bootstrap with normal-approx CIs |
+| `cluster` | Cluster identifier(s). Length 1 → one-way cluster bootstrap with percentile CIs. Length 2 (e.g. `c("firm", "year")`) → two-way CGM bootstrap with normal-approx CIs |
 | `strata` | Stratification identifier (not combined with two-way clustering) |
+| `weights` | Regression weights (column name or vector) |
 | `alpha` | Significance level (default 0.05) |
 | `converge` | `TRUE`, `FALSE`, or `list(minreps, stepsize, threshold)` |
 | `progress` | Show a progress bar (default `TRUE`) |

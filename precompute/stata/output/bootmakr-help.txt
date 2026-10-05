@@ -1,0 +1,365 @@
+                                                                    ___  ____  ____  ____  ____(R)
+                                                                   /__    /   ____/   /   ____/   
+                                                                  ___/   /   /___/   /   /___/    
+                                                                    Statistics/Data analysis      
+      
+      Title
+      
+          bootmakr --    Bootstrap inference for sensemakr sensitivity analysis
+      
+      
+      Syntax
+      
+          Standard mode
+      
+              bootmakr varlist [if] [in] [weight], treat(varname) [options]
+      
+          Program mode
+      
+              bootmakr [if] [in] [weight], treat(string) program(string) [options]
+      
+      
+          options                         Description
+          --------------------------------------------------------------------------------------
+          Required
+            treat(varname)                treatment variable (standard mode) or label (program
+                                            mode)
+      
+          Mode
+            program(string)               user-supplied e-class program to bootstrap instead of
+                                            sensemakr
+      
+          Bootstrap
+            reps(#)                       number of bootstrap replications; default is
+                                            reps(1000)
+            seed(#)                       random-number seed
+            cluster(varname)              variable identifying resampling clusters
+            idcluster(varname)            variable for new cluster IDs in bootstrap samples
+            strata(varname)               variable identifying strata
+            dots(#)                       display a dot every # replications; 0 = no dots
+            saving(filename)              save bootstrap replications to filename
+            verbose                       display default bootstrap header and table
+      
+          Sensitivity (standard mode)
+            benchmark(varlist)            benchmark covariate(s) for bound calculation
+            gbenchmark(varlist)           group benchmark covariate(s)
+            kd(numlist)                   multiplier(s) for benchmark strength on treatment;
+                                            default is kd(1); accepts multiple values
+            ky(numlist)                   multiplier(s) for benchmark strength on outcome;
+                                            defaults to kd
+            q(#)                          percentage of treatment effect to explain; default is
+                                            q(1)
+            suppress                      suppress sensemakr output
+            boundsindex(# #)              row and column indices for e(bounds); default is 1 5
+      
+          Passed on to sensemakr unchanged; see remark
+            kr(numlist)                   relative strength parameter(s); values in (0, 1]
+            r2dxj_x(numlist)              partial R-squared of confounder with treatment
+            r2yxj_dx(numlist)             partial R-squared of confounder with outcome
+            bound_label(string)           custom label for the bounds
+            reduce                        use reduce formula for bound
+      
+          Significance
+            alpha(#)                      significance level; default is alpha(0.05)
+            level(#)                      confidence level; default is level(95)
+      
+          Display
+            plot                          plot estimates and CIs across kd values (requires
+                                            multiple kd)
+      
+          Convergence
+            converge(string)              run convergence diagnostics with suboptions
+          --------------------------------------------------------------------------------------
+      
+          fweights, aweights, pweights, and iweights are passed on to sensemakr; see weight. The
+          current version of sensemakr does not accept weights, so specifying them in standard
+          mode stops with error r(101).
+      
+      
+      Description
+      
+          bootmakr performs bootstrap inference for sensemakr sensitivity analysis. It wraps
+          Stata's bootstrap command around sensemakr to produce percentile bootstrap confidence
+          intervals, bootstrap p-values, and bootstrap standard errors for bias-adjusted
+          treatment effects.
+      
+          In standard mode, you supply a varlist (dependent variable and controls) and treat()
+          specifying the treatment variable. bootmakr constructs and bootstraps the sensemakr
+          call internally.
+      
+          In program mode, you supply a user-written e-class program via program() that itself
+          calls sensemakr (or any command that stores results in e(bounds)). treat() is used
+          only as a display label.  This mode is useful when you need to control the estimation
+          before sensemakr, e.g., running a specific regression first.
+      
+          When multiple kd values are specified, bootmakr bootstraps each bound separately and
+          reports results for each. The plot option produces a coefficient plot across kd
+          values.
+      
+          Below the bootstrap table bootmakr reports how strong the benchmark is, and therefore
+          how strong the hypothetical omitted variable is assumed to be; see Benchmark strength.
+      
+          Worked examples, including a step-by-step replication of a published study, are
+          available at https://jespernwulff.github.io/bootmakr/.
+      
+      
+      Options
+      
+              +----------+
+          ----+ Required +----------------------------------------------------------------------
+      
+          treat(varname) specifies the treatment variable in standard mode.  In program mode,
+              treat(string) is a label used in the output table.
+      
+              +------+
+          ----+ Mode +--------------------------------------------------------------------------
+      
+          program(string) specifies a user-written program that posts results to e(bounds). When
+              this option is specified, bootmakr enters program mode and does not accept a 
+              varlist. Sensitivity options (benchmark, kd, etc.) are not passed by bootmakr in
+              this mode; your program is responsible for including them.
+      
+              +-----------+
+          ----+ Bootstrap +---------------------------------------------------------------------
+      
+          reps(#) specifies the number of bootstrap replications. The default is 1000.
+      
+          seed(#) sets the random-number seed for reproducibility.
+      
+          cluster(varname) specifies a variable identifying clusters for cluster bootstrap
+              resampling.
+      
+          idcluster(varname) creates a new variable containing unique cluster identifiers in the
+              bootstrap samples.
+      
+          strata(varname) specifies a variable identifying strata for stratified bootstrap
+              resampling.
+      
+          dots(#) requests that a dot be displayed every # replications to show progress. The
+              default is 0 (no dots).
+      
+          saving(filename) saves the bootstrap replications to filename.
+      
+          verbose displays the default bootstrap header and coefficient table. By default,
+              bootmakr suppresses the standard bootstrap output and displays its own formatted
+              table.
+      
+              +-----------------------------+
+          ----+ Sensitivity (standard mode) +---------------------------------------------------
+      
+          benchmark(varlist) specifies one or more benchmark covariates for calculating
+              sensitivity bounds.
+      
+          gbenchmark(varlist) specifies one or more group benchmark covariates.
+      
+          kd(numlist) specifies one or more multipliers for benchmark strength on treatment: the
+              omitted variable is assumed kd times as strong as the benchmark. The default is
+              kd(1), an omitted variable exactly as strong as the benchmark. When multiple
+              values are given (e.g., kd(1 2 3)), bootmakr bootstraps each bound separately.
+      
+          ky(numlist) specifies multipliers for benchmark strength on outcome. If omitted,
+              defaults to the value(s) of kd.
+      
+          kr(numlist) specifies relative strength parameter(s); values must be in (0, 1].
+      
+          q(#) specifies the fraction of the treatment effect to be explained by the confounder.
+              The default is q(1).
+      
+          r2dxj_x(numlist) specifies the hypothesized partial R-squared of the confounder with
+              the treatment.
+      
+          r2yxj_dx(numlist) specifies the hypothesized partial R-squared of the confounder with
+              the outcome.
+      
+          bound_label(string) specifies a custom label for the bounds in sensemakr output.
+      
+          reduce uses the reduce formula for bound calculation.
+      
+          suppress suppresses sensemakr output during each replication.
+      
+          boundsindex(# #) specifies the row and column indices used to extract the bound from
+              e(bounds). The default is 1 5.
+      
+          Remark. kr(), r2dxj_x(), r2yxj_dx(), bound_label() and reduce are passed on to
+          sensemakr unchanged and therefore require a version of sensemakr that accepts them.
+          The version distributed by SSC at the time of writing (distribution date 28 April
+          2020) does not: with it these five options stop with error r(198). Every other option
+          documented here works with that version. A benchmark is required in standard mode:
+          specify benchmark() or gbenchmark().
+      
+              +--------------+
+          ----+ Significance +------------------------------------------------------------------
+      
+          alpha(#) specifies the significance level. The default is 0.05.  This option is
+              mutually exclusive with level().
+      
+          level(#) specifies the confidence level as a percentage (e.g., 95).  This option is
+              mutually exclusive with alpha().
+      
+              +---------+
+          ----+ Display +-----------------------------------------------------------------------
+      
+          plot produces a coefficient plot showing the point estimates and bootstrap confidence
+              intervals across kd values. Requires that multiple kd values are specified. Solid
+              markers indicate p < alpha; hollow markers indicate p >= alpha.
+      
+              +-------------+
+          ----+ Convergence +-------------------------------------------------------------------
+      
+          converge(string) runs convergence diagnostics to assess whether the number of
+              bootstrap replications is sufficient. Produces three combined graphs: a histogram
+              of the bootstrap distribution, and plots of the standard error and p-value as
+              functions of the number of replications.  Also displays a summary table with
+              coefficient of variation statistics.
+      
+              Suboptions of converge():
+      
+              minreps(#) specifies the minimum number of replications to start the convergence
+                  assessment. The default is 500.
+      
+              stepsize(#) specifies the increment between evaluation points.  The default is
+                  500.
+      
+              threshold(#) specifies the replication count above which "high" convergence
+                  statistics are reported. The default is 75% of reps().
+      
+              savedata(filename) saves the convergence data to filename.
+      
+      
+      Benchmark strength
+      
+          The bootstrap table is followed by a descriptive block with two parts.
+      
+              Observed strength of the benchmark: the partial R-squared of the benchmark with
+                  the treatment given the other covariates, and with the outcome given the
+                  treatment and the covariates, together with their square roots (absolute
+                  partial correlations). With gbenchmark() the group partial R-squared is
+                  reported; with several benchmark() variables, the first one (the one the
+                  adjusted estimates refer to).
+      
+              Implied strength of the omitted variable at each kd:  sensemakr's bounds on the
+                  same two partial R-squared values, and the corresponding absolute partial
+                  correlations. The adjusted estimates are based on these values.
+      
+          Both parts are functions of the data alone. No standard error enters them, so they do
+          not depend on the variance estimator and are not bootstrapped.  They translate "kd
+          times as strong as the benchmark" into the partial-correlation scale familiar from the
+          impact threshold of a confounding variable (ITCV). No t-implied correlation or
+          threshold is reported. In program mode only the implied part is available, and only if
+          the user program leaves sensemakr's e(bounds) behind.
+      
+      
+      Stored results
+      
+          bootmakr stores the following in r():
+      
+          Scalars             
+            r(N)                     number of observations
+            r(N_reps)                number of bootstrap replications
+            r(N_successful)          number of successful replications
+            r(N_clust)               number of clusters (if cluster() specified)
+            r(estimate)              point estimate (first kd value)
+            r(se)                    bootstrap standard error
+            r(ci_lower)              lower bound of percentile CI
+            r(ci_upper)              upper bound of percentile CI
+            r(p)                     bootstrap p-value (two-sided)
+            r(r2dxj_x)               partial R-squared of the benchmark with the treatment
+            r(r2yxj_dx)              partial R-squared of the benchmark with the outcome
+            r(r2dz_x)                implied partial R-squared of the omitted variable with the
+                                       treatment (first kd value)
+            r(r2yz_dx)               implied partial R-squared of the omitted variable with the
+                                       outcome (first kd value)
+      
+          Scalars (convergence, if converge() specified)
+            r(conv_se_mean)          mean SE across replication counts
+            r(conv_se_range)         range of SE across all replication counts
+            r(conv_se_cv)            CV% of SE across all replication counts
+            r(conv_se_range_high)    range of SE above threshold
+            r(conv_se_cv_high)       CV% of SE above threshold
+            r(conv_p_mean)           mean p-value across replication counts
+            r(conv_p_range)          range of p-value across all replication counts
+            r(conv_p_cv)             CV% of p-value across all replication counts
+            r(conv_p_range_high)     range of p-value above threshold
+            r(conv_p_cv_high)        CV% of p-value above threshold
+            r(conv_thresh_reps)      threshold replication count
+            r(boot_mean)             mean of bootstrap distribution
+            r(boot_sd)               standard deviation of bootstrap distribution
+      
+          Matrices            
+            r(ci_percentile)         percentile CI bounds (2 x k matrix)
+            r(results)               results matrix with columns: estimate, se, ci_lower,
+                                       ci_upper, pvalue (if multiple kd values)
+            r(benchmark_strength)    implied strength of the omitted variable, one row per kd,
+                                       with columns: kd, ky, r2dz_x, r2yz_dx, r_dz_x, r_yz_dx
+          --------------------------------------------------------------------------------------
+      
+      
+      Examples
+      
+          These examples use the Darfur data from Hazlett (2020), available at:
+              . use
+                  "https://raw.githubusercontent.com/resonance1/sensemakr-stata/master/darfur.dt
+                  > a", clear
+      
+          Standard bootstrap with benchmark
+              . bootmakr peacefactor directlyharmed age farmer herder pastv hhsize female
+                  i.village_f,
+              treat(directlyharmed) benchmark(female) reps(500) seed(12345)
+      
+          Clustered bootstrap
+              . bootmakr peacefactor directlyharmed age farmer herder pastv hhsize female
+                  i.village_f,
+              treat(directlyharmed) benchmark(female) reps(500) seed(12345)
+              cluster(village_factor)
+      
+          Multiple kd values with plot
+              . bootmakr peacefactor directlyharmed age farmer herder pastv hhsize female
+                  i.village_f,
+              treat(directlyharmed) benchmark(female) kd(1 2 3)
+              reps(500) seed(12345) cluster(village_factor) plot
+      
+          Group benchmark
+              . bootmakr peacefactor directlyharmed age farmer herder pastv hhsize female
+                  i.village_f,
+              treat(directlyharmed)
+              gbenchmark(age farmer herder pastv hhsize female)
+              reps(500) seed(12345) cluster(village_factor) kd(1 2 3) plot
+      
+          Convergence diagnostics
+              . bootmakr peacefactor directlyharmed age farmer herder pastv hhsize female
+                  i.village_f,
+              treat(directlyharmed)
+              gbenchmark(age farmer herder pastv hhsize female)
+              reps(1000) seed(12345) cluster(village_factor)
+              converge(minreps(100) stepsize(100))
+      
+          Saving and inspecting bootstrap draws
+              . bootmakr peacefactor directlyharmed age farmer herder pastv hhsize female
+                  i.village_f,
+              treat(directlyharmed)
+              gbenchmark(age farmer herder pastv hhsize female)
+              reps(500) seed(12345) cluster(village_factor)
+              converge(minreps(100) stepsize(100) savedata(my_convergence_data))
+              . use my_convergence_data.dta, clear
+      
+      
+      References
+      
+          Cinelli, C. and C. Hazlett. 2020.  Making sense of sensitivity: Extending omitted
+              variable bias.  Journal of the Royal Statistical Society: Series B (Statistical
+              Methodology) 82(1): 39-67.
+      
+          Cinelli, C., J. Ferwerda, and C. Hazlett. 2024.  sensemakr: Sensitivity analysis tools
+              for OLS in R and Stata.  Observational Studies 10(2): 93-127.  
+              https://dx.doi.org/10.1353/obs.2024.a946583
+      
+          Lonati, S. and J. N. Wulff. 2026.  Why you should not use the ITCV with robust
+              standard errors (and what to do instead).  SSRN Working Paper.
+      
+      
+      Author
+      
+          Jesper N. Wulff
+      
+          Bug reports and feature requests:
+          https://github.com/jespernwulff/bootmakr-stata/issues

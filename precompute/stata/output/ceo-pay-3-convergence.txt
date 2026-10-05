@@ -1,0 +1,2 @@
+se_mean	se_range	se_cv	se_range_high	se_cv_high	p_mean	p_range	p_cv	p_range_high	p_cv_high	threshold
+ .1281512633	 .0047318935	  .569373584	 .0008028597	 .1411585269	   .06204307	 .0100000054	 2.642495266	 .0035984851	 1.503262129	       10000

@@ -13,3 +13,9 @@
 ^\.tmp_.*$
 ^\.claude$
 ^\.git$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^precompute$
+^vignettes/articles$
+\.Rmd\.orig$

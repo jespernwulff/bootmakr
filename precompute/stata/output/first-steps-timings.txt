@@ -1,0 +1,5 @@
+label	seconds
+first	     57.2
+sweep	    112.2
+program	     45.5
+compare	     84.3

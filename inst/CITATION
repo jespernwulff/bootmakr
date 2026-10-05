@@ -1,0 +1,21 @@
+bibentry(
+  bibtype = "Unpublished",
+  header  = "If you use bootmakr, please cite the paper that introduces it:",
+  title   = "Why you should not use the {ITCV} with robust standard errors (and what to do instead)",
+  author  = c(person("Sirio", "Lonati"), person(c("Jesper", "N."), "Wulff")),
+  year    = "2026",
+  note    = "Working paper"
+)
+
+bibentry(
+  bibtype = "Article",
+  header  = "bootmakr builds on sensemakr; please also cite:",
+  title   = "Making sense of sensitivity: Extending omitted variable bias",
+  author  = c(person("Carlos", "Cinelli"), person("Chad", "Hazlett")),
+  journal = "Journal of the Royal Statistical Society: Series B (Statistical Methodology)",
+  year    = "2020",
+  volume  = "82",
+  number  = "1",
+  pages   = "39--67",
+  doi     = "10.1111/rssb.12348"
+)

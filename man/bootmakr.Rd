@@ -31,32 +31,49 @@ bootmakr(
 )
 }
 \arguments{
-\item{formula}{A formula for the OLS regression.}
+\item{formula}{A formula for the OLS regression: outcome on the left,
+treatment and covariates on the right.}
 
 \item{data}{A data frame.}
 
-\item{treat}{Character: treatment variable name.}
+\item{treat}{Character: name of the treatment variable (the coefficient
+whose sensitivity is assessed).}
 
-\item{benchmark_covariates}{Character vector: individual benchmark covariates.}
+\item{benchmark_covariates}{Character vector: observed covariate(s) used as
+benchmark for the strength of the omitted variable. If several are
+supplied, the adjusted estimates refer to the first one.}
 
-\item{gbenchmark_covariates}{Character vector: grouped benchmark covariates.
-Uses \code{group_partial_r2} to compute joint R2 values.}
+\item{gbenchmark_covariates}{Character vector: a group of covariates used
+jointly as benchmark. Uses \code{group_partial_r2} to compute joint R2
+values.}
 
-\item{kd, ky}{Numeric vectors of benchmark multipliers. \code{ky} defaults to \code{kd}.}
+\item{kd, ky}{Numeric vectors of benchmark multipliers: the omitted variable
+is assumed \code{kd} times as strong as the benchmark in explaining the
+treatment and \code{ky} times as strong in explaining the outcome.
+\code{kd} defaults to 1 (exactly as strong as the benchmark) and
+\code{ky} to \code{kd}. A vector of several values gives one row of
+results per value (a "kd sweep").}
 
-\item{q, alpha}{Numeric: proportion of effect / significance level.}
+\item{q, alpha}{Numeric: proportion of the effect to be explained away
+(passed to sensemakr) and significance level of the bootstrap confidence
+interval (default 0.05).}
 
-\item{r2dz.x, r2yz.dx}{Optional manual R2 values (skip benchmark computation).}
+\item{r2dz.x, r2yz.dx}{Optional manual partial R2 values of the omitted
+variable with the treatment and with the outcome (instead of a
+benchmark).}
 
 \item{bound_label}{Character label for bounds table.}
 
-\item{reduce}{Logical: bias-reducing confounders (default TRUE).}
+\item{reduce}{Logical: should the omitted variable reduce the absolute
+value of the estimate (default \code{TRUE})?}
 
-\item{bounds_row}{Integer: which row of bounds table (default 1).}
+\item{bounds_row}{Integer: which row of sensemakr's bounds table to use
+when a single \code{kd} is supplied (default 1).}
 
 \item{reps}{Integer: bootstrap replications (default 1000).}
 
-\item{seed}{Integer or NULL.}
+\item{seed}{Integer or \code{NULL}. No seed is set unless one is supplied,
+so results vary from run to run without it.}
 
 \item{cluster}{Column name(s) or vector for the cluster bootstrap.
 Length 1 (e.g. \code{"firm"}) gives a one-way cluster bootstrap with
@@ -68,21 +85,115 @@ dimension and on their intersection) and combined as
 use a normal approximation \code{estimate +/- z * SE}. Two-way clustering
 is incompatible with \code{strata}.}
 
-\item{strata, weights}{Column name or vector.}
+\item{strata, weights}{Column name or vector: strata for a stratified
+bootstrap, and regression weights.}
 
 \item{progress}{Logical: show a progress bar (default TRUE).}
 
 \item{dots}{Deprecated; use \code{progress} instead.}
 
-\item{converge}{TRUE, FALSE, or list(minreps, stepsize, threshold).}
+\item{converge}{\code{TRUE}, \code{FALSE}, or
+\code{list(minreps, stepsize, threshold)}: an informal convergence check
+that recomputes the standard error and p-value on the first
+\code{minreps}, \code{minreps + stepsize}, ... replications and
+summarises how much they still move, overall and from \code{threshold}
+replications onwards.}
 
-\item{verbose}{Logical.}
+\item{verbose}{Logical; currently unused.}
 }
 \value{
-Object of class \code{"bootmakr"}.
+An object of class \code{"bootmakr"}, a list with (among others)
+\describe{
+\item{\code{results}}{data frame with one row per \code{kd}: adjusted
+\code{estimate}, bootstrap \code{se}, \code{ci_lower},
+\code{ci_upper}, \code{pvalue}, and the implied strength of the
+omitted variable (\code{r2dz.x}, \code{r2yz.dx}) the row is based
+on.}
+\item{\code{benchmark_strength}}{list with \code{$observed} (partial
+R2 of the benchmark with treatment and outcome, and their square
+roots) and \code{$implied} (sensemakr's bound on the omitted
+variable at each \code{kd}/\code{ky}, and the corresponding
+absolute partial correlations).}
+\item{\code{boot_samples}}{matrix of bootstrap draws of the adjusted
+estimate, one column per \code{kd} (a list of three such matrices
+with two-way clustering).}
+\item{\code{convergence}}{convergence diagnostics, if requested.}
+\item{\code{N}, \code{N_reps}, \code{N_successful}, \code{N_fail},
+\code{N_clust}}{sample size, replications requested, completed and
+failed, and number of clusters.}
+\item{\code{sensemakr_orig}}{the \code{sensemakr} object of the
+original fit.}
+}
+Use \code{print()} for the results table and \code{plot()} for the
+kd-sweep, convergence and histogram plots.
 }
 \description{
-Wraps \code{\link[sensemakr]{sensemakr}} in a bootstrap loop to produce
-bootstrap standard errors, percentile confidence intervals, and p-values
-for the bias-adjusted treatment effect.
+Wraps \code{\link[sensemakr]{sensemakr}} (Cinelli & Hazlett, 2020) in a
+bootstrap loop. For an omitted variable \code{kd} times as strong as an
+observed benchmark covariate, \code{bootmakr()} computes the bias-adjusted
+estimate of the treatment coefficient and obtains its standard error,
+confidence interval and p-value by simple, stratified or cluster bootstrap,
+so that inference does not rest on the conventional OLS variance formula.
+}
+\details{
+In every replication the data are resampled (rows, whole clusters, or
+within strata), the regression is refitted, and the benchmark bounds and
+the bias-adjusted estimate are recomputed. The bootstrap distribution
+therefore reflects sampling uncertainty in the regression coefficient
+\emph{and} in the estimated strength of the benchmark. The standard error
+is the standard deviation of that distribution, the confidence interval
+its percentile interval, and the p-value is twice the smaller of the
+shares of replications at or below zero and at or above zero.
+
+With a length-two \code{cluster}, three bootstraps are combined with the
+Cameron, Gelbach & Miller (2011) subtractive variance estimator, and the
+confidence interval and p-value use a normal approximation.
+
+Below the table of adjusted estimates, the print method reports the
+\strong{benchmark strength}: the partial R2 of the benchmark with the
+treatment (given the other covariates) and with the outcome (given the
+treatment and the covariates), and sensemakr's implied bound on the
+omitted variable at each \code{kd}, together with their square roots
+(absolute partial correlations). These are functions of the data alone.
+No standard error enters them, so they do not depend on the variance
+estimator. They are stored in \code{$benchmark_strength}.
+}
+\examples{
+data("darfur", package = "sensemakr")
+
+# An omitted variable as strong as `female` (kd = 1, the default);
+# villages are resampled as whole clusters. 100 replications keep the
+# example quick; use 1,000 or more in practice.
+out <- bootmakr(
+  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
+    pastvoted + hhsize_darfur + female + village,
+  data = darfur, treat = "directlyharmed",
+  benchmark_covariates = "female",
+  cluster = "village", reps = 100, seed = 1, progress = FALSE
+)
+out
+
+# Benchmark strength on the partial-R2 and partial-correlation scales
+out$benchmark_strength
+
+}
+\references{
+Cameron, A. C., Gelbach, J. B., & Miller, D. L. (2011). Robust inference
+with multiway clustering. \emph{Journal of Business & Economic
+Statistics}, 29(2), 238-249.
+
+Cinelli, C., & Hazlett, C. (2020). Making sense of sensitivity: Extending
+omitted variable bias. \emph{Journal of the Royal Statistical Society:
+Series B}, 82(1), 39-67.
+
+Cinelli, C., Ferwerda, J., & Hazlett, C. (2024). sensemakr: Sensitivity
+analysis tools for OLS in R and Stata. \emph{Observational Studies},
+10(2), 93-127.
+
+Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
+robust standard errors (and what to do instead). Working paper.
+}
+\seealso{
+\code{\link{print.bootmakr}}, \code{\link{plot.bootmakr}},
+\code{\link[sensemakr]{sensemakr}}
 }
