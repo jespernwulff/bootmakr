@@ -357,9 +357,9 @@
               standard errors (and what to do instead).  SSRN Working Paper.
       
       
-      Author
+      Authors
       
-          Jesper N. Wulff
+          Jesper N. Wulff and Sirio Lonati
       
           Bug reports and feature requests:
           https://github.com/jespernwulff/bootmakr-stata/issues
