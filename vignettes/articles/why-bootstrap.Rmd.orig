@@ -91,7 +91,7 @@ correlation, *t* / √(*t*² + df), does the same for the critical *t*, and
 reports the gap between the two, rescaled so that it reads as the product of
 correlations an omitted variable would need to close it. Here it is for both
 *t* statistics. (The code implements the definition directly; the `konfound`
-packages for R and Stata give the same numbers.)
+package for R gives the same numbers.)
 
 `r tabs_r("itcv")`
 
@@ -128,8 +128,9 @@ With conventional standard errors the ITCV is
 correlations, the second number says that an omitted variable correlated
 about `r num(sqrt(it.clus[["ITCV"]]), 2, lead = FALSE)` with both `x` and `y`
 (the square root of the ITCV) would be enough to overturn the result. Now
-look at `q`, whose correlations we know. The ITCV is stated in correlations
-given the other covariates, so we take `q`'s partial correlations given `c`.
+look at `q`, whose correlations we know. The ITCV computed above is its
+conditional form, stated in partial correlations given the other covariates,
+so we take `q`'s partial correlations given `c`.
 
 `r tabs_r("impact")`
 
@@ -216,7 +217,7 @@ through each of them.
 `c`, it computes the bias-adjusted coefficient directly, and that estimate
 is a function of the data alone. But the standard error and confidence
 interval it attaches to the adjusted coefficient are derived under
-conventional OLS inference (Cinelli & Hazlett, 2020, Section 4.3).
+conventional OLS inference (Cinelli & Hazlett, 2020).
 
 `r tabs_r("analytic")`
 
@@ -346,8 +347,9 @@ Lonati and Wulff (2026) make this argument formally, illustrate it with a
 simulated example like the one above (without `c`, and with a stronger `q`),
 and test bootstrap-based `sensemakr` against the ITCV in a Monte Carlo study
 with heteroskedastic, clustered, unbalanced and weak-benchmark designs. The
-bootstrap interval comes close to nominal coverage throughout, while the
-ITCV's mistakes grow with the sample size under clustering. The paper ends
+bootstrap interval comes close to nominal coverage in most conditions, far
+closer than the analytic interval, while the ITCV's mistakes grow with the
+sample size under clustering. The paper ends
 with a four-stage workflow (which standard errors, how different are they,
 how strong is a plausible omitted variable, can the bootstrap be trusted)
 that the [worked example](ceo-pay.html) follows on a published study.

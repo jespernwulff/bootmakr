@@ -220,8 +220,7 @@ the same for the critical <em>t</em>, and reports the gap between the
 two, rescaled so that it reads as the product of correlations an omitted
 variable would need to close it. Here it is for both <em>t</em>
 statistics. (The code implements the definition directly; the
-<code>konfound</code> packages for R and Stata give the same
-numbers.)</p>
+<code>konfound</code> package for R gives the same numbers.)</p>
 <div class="lang-tabs">
 <ul class="nav nav-tabs" role="tablist">
 <li class="nav-item" role="presentation">
@@ -281,9 +280,9 @@ ones it drops to .13. Read as a product of correlations, the second
 number says that an omitted variable correlated about .36 with both
 <code>x</code> and <code>y</code> (the square root of the ITCV) would be
 enough to overturn the result. Now look at <code>q</code>, whose
-correlations we know. The ITCV is stated in correlations given the other
-covariates, so we take <code>q</code>’s partial correlations given
-<code>c</code>.</p>
+correlations we know. The ITCV computed above is its conditional form,
+stated in partial correlations given the other covariates, so we take
+<code>q</code>’s partial correlations given <code>c</code>.</p>
 <div class="lang-tabs">
 <ul class="nav nav-tabs" role="tablist">
 <li class="nav-item" role="presentation">
@@ -409,7 +408,7 @@ variable as strong as <code>c</code>, it computes the bias-adjusted
 coefficient directly, and that estimate is a function of the data alone.
 But the standard error and confidence interval it attaches to the
 adjusted coefficient are derived under conventional OLS inference
-(Cinelli &amp; Hazlett, 2020, Section 4.3).</p>
+(Cinelli &amp; Hazlett, 2020).</p>
 <div class="lang-tabs">
 <ul class="nav nav-tabs" role="tablist">
 <li class="nav-item" role="presentation">
@@ -658,12 +657,11 @@ with a simulated example like the one above (without <code>c</code>, and
 with a stronger <code>q</code>), and test bootstrap-based
 <code>sensemakr</code> against the ITCV in a Monte Carlo study with
 heteroskedastic, clustered, unbalanced and weak-benchmark designs. The
-bootstrap interval comes close to nominal coverage throughout, while the
-ITCV’s mistakes grow with the sample size under clustering. The paper
-ends with a four-stage workflow (which standard errors, how different
-are they, how strong is a plausible omitted variable, can the bootstrap
-be trusted) that the <a href="ceo-pay.html">worked example</a> follows
-on a published study.</p>
+bootstrap interval comes close to nominal coverage in most conditions,
+far closer than the analytic interval, while the ITCV’s mistakes grow
+with the sample size under clustering. The paper ends with a four-stage
+workflow (which standard errors, how different are they, how strong is a
+plausible omitted variable, can the bootstrap be trusted) that the <a href="ceo-pay.html">worked example</a> follows on a published study.</p>
 </div>
 <div class="section level2">
 <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>
