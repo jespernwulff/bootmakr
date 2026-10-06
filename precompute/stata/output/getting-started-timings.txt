@@ -1,0 +1,4 @@
+label	seconds
+first	     39.9
+sweep	     38.8
+program	     31.1

@@ -10,10 +10,13 @@ description: >
 
 
 `bootmakr` obtains its standard errors, confidence intervals and *p*-values
-by resampling the data. What it resamples is your decision, and it should
-follow one rule: **resample the units that you would treat as independent
-when choosing standard errors for the regression itself.** If you would
-cluster the standard errors by firm, resample firms.
+by resampling the data, because the analytic alternatives, the ITCV and the
+confidence interval of `sensemakr`, rest on the conventional OLS variance
+and break down when the regression calls for robust standard errors (see
+[Why bootstrap?](why-bootstrap.html)). What it resamples is your decision,
+and it should follow one rule: **resample the units that you would treat as
+independent when choosing standard errors for the regression itself.** If
+you would cluster the standard errors by firm, resample firms.
 
 | Your regression would use | Resample | R | Stata |
 |---|---|---|---|
@@ -184,12 +187,14 @@ two.way
 #> x with treatment | X      0.1355       0.368
 #> x with outcome | D, X     0.0625       0.250
 #> Implied strength of the omitted variable (sensemakr bounds):
-#>           kd   ky R2dz.x R2yz.dx |r_dz.x| |r_yz.dx|
-#> 1.00x x 1.00 1.00 0.1567  0.0915    0.396     0.303
+#>           kd   ky R2dz.x R2yz.dx Impact
+#> 1.00x x 1.00 1.00 0.1567  0.0915  0.160
 #> (R2dz.x, R2yz.dx: partial R2 of the omitted variable with the treatment given the
-#>  covariates, and with the outcome given treatment and covariates; |r| = square root,
-#>  i.e. the partial-correlation scale of the ITCV. Descriptive only: independent of the
-#>  variance estimator. No t-implied correlation or threshold is reported.)
+#>  covariates, and with the outcome given treatment and covariates. Impact: product of
+#>  its partial correlations with the outcome and with the treatment, both given the
+#>  covariates only, i.e. the scale of the ITCV; signed so that the omitted variable
+#>  biases the estimate away from zero. Descriptive only: independent of the variance
+#>  estimator, and not a threshold.)
 ```
 
 
@@ -262,6 +267,6 @@ Chen, G., Chittoor, R., & Vissa, B. (2021). Does nepotism run in the family?
 CEO pay and pay-performance sensitivity in Indian family firms. *Strategic
 Management Journal*, 42(7), 1326--1343. <https://doi.org/10.1002/smj.3263>
 
-Lonati, S., & Wulff, J. N. (2026). *Why you should not use the ITCV with
-robust standard errors (and what to do instead)*. SSRN working paper.
-<https://ssrn.com/abstract=6789678>
+Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
+robust standard errors (and what to do instead). *Academy of Management
+Proceedings*, 2026(1). <https://doi.org/10.5465/AMPROC.2026.247bp>

@@ -1,3 +1,32 @@
+# bootmakr 0.4.0
+
+* The benchmark-strength block now reports the **impact** of the assumed
+  omitted variable: the product of its partial correlations with the outcome
+  and with the treatment, both given the covariates only, which is the scale
+  on which the impact threshold of a confounding variable (ITCV) is stated.
+  The outcome correlation is recovered from `sensemakr`'s bound (which also
+  conditions on the treatment) with the recursion formula for partial
+  correlations, signed so that the omitted variable biases the estimate away
+  from zero (towards zero with `reduce = FALSE`). The column replaces the two
+  absolute partial correlations in the printed block; both remain in
+  `$benchmark_strength$implied`, which also gains `r_yz.x` and `impact`, and
+  `$results` gains `impact`. `$benchmark_strength$r_yd.x` holds the partial
+  correlation of the outcome with the treatment used in the recursion. Like
+  the rest of the block, the impact is computed from the data alone.
+* New example data set `firms`: a simulated panel of 250 firms observed for
+  20 years, a variant of the simulated example in Lonati and Wulff (2026),
+  with an observed control `c` and an unobserved variable `q` of equal
+  strength, so that "an omitted variable as strong as `c`" is a variable like
+  `q` and every answer can be checked. The examples, the vignette and the
+  README use it instead of `sensemakr`'s Darfur data; the Stata command ships
+  the same data as `firms.dta`.
+* Documentation: the paper is cited as Lonati and Wulff (2026), *Academy of
+  Management Proceedings*, <https://doi.org/10.5465/AMPROC.2026.247bp>, and
+  the bootstrap procedure is credited to Cinelli, Ferwerda and Hazlett (2024,
+  Appendix C). New website article, *Why bootstrap?*, with the paper's
+  argument against the ITCV and analytic `sensemakr` under robust standard
+  errors, and a worked example of what happens when `kd` is impossibly large.
+
 # bootmakr 0.3.0
 
 * `print()` now reports the **benchmark strength** below the table of

@@ -38,7 +38,7 @@
     
     <a class="navbar-brand me-2" href="index.html">bootmakr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,6 +60,7 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-guides">Guides</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-guides">
+    <a class="dropdown-item" href="articles/why-bootstrap.html">Why bootstrap?</a>
     <a class="dropdown-item" href="articles/benchmark-strength.html">How strong is the benchmark?</a>
     <a class="dropdown-item" href="articles/clustering.html">Clustered and stratified data</a>
     <a class="dropdown-item" href="articles/r-and-stata.html">R and Stata side by side</a>
@@ -68,7 +69,7 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-reference">Reference</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-reference">
-    <a class="dropdown-item" href="reference/index.html">R functions</a>
+    <a class="dropdown-item" href="reference/index.html">R functions and data</a>
     <a class="dropdown-item" href="articles/stata-help.html">Stata help file</a>
   </div>
 </li>
@@ -113,12 +114,12 @@ Sensitivity analysis for omitted variables, with bootstrap inference for regress
 <h2 id="what-it-does">What it does<a class="anchor" aria-label="anchor" href="#what-it-does"></a>
 </h2>
 <p>How strong would an omitted variable have to be to change a regression result? <a href="https://carloscinelli.com/sensemakr/" class="external-link"><code>sensemakr</code></a> (Cinelli &amp; Hazlett, 2020) gives a concrete answer: the coefficient you would have obtained had a variable as strong as one of your observed covariates, the <em>benchmark</em>, been left out of the model.</p>
-<p><code>bootmakr</code> wraps that calculation in a bootstrap. In every replication it resamples the data (whole clusters when observations are clustered), refits the regression and recomputes the bias-adjusted coefficient. You get a standard error, a percentile confidence interval and a <em>p</em>-value for the adjusted coefficient that do not rest on the conventional OLS variance formula.</p>
+<p><code>bootmakr</code> wraps that calculation in a bootstrap, as Cinelli, Ferwerda and Hazlett (2024, Appendix C) propose. In every replication it resamples the data (whole clusters when observations are clustered), refits the regression and recomputes the bias-adjusted coefficient. You get a standard error, a percentile confidence interval and a <em>p</em>-value for the adjusted coefficient that do not rest on the conventional OLS variance formula, and a statement of how strong the assumed omitted variable is on the scale of the ITCV.</p>
 </div>
 <div class="section level2">
 <h2 id="why-it-exists">Why it exists<a class="anchor" aria-label="anchor" href="#why-it-exists"></a>
 </h2>
-<p>The impact threshold of a confounding variable (ITCV) is commonly read as the smallest product of correlations an omitted variable must have with the predictor and with the outcome to overturn a statistically significant result. Lonati and Wulff (2026) show that this reading generally breaks down when the regression is estimated with heteroskedasticity- or cluster-robust standard errors, and propose bootstrap-based <code>sensemakr</code> as an alternative. <code>bootmakr</code> is the software that accompanies the paper. The R package and the Stata command implement the same procedure and are documented side by side on this site.</p>
+<p>The impact threshold of a confounding variable (ITCV) is commonly read as the smallest product of correlations an omitted variable must have with the predictor and with the outcome to overturn a statistically significant result. Lonati and Wulff (2026) show that this reading breaks down when the regression is estimated with heteroskedasticity- or cluster-robust standard errors, that the analytic confidence interval of <code>sensemakr</code> breaks down for the same reason, and that bootstrap-based <code>sensemakr</code> repairs both. <code>bootmakr</code> is the software that accompanies the paper. The R package and the Stata command implement the same procedure and are documented side by side on this site; <a href="articles/why-bootstrap.html">Why bootstrap?</a> shows the argument on a small simulated example.</p>
 </div>
 <div class="section level2">
 <h2 id="install">Install<a class="anchor" aria-label="anchor" href="#install"></a>
@@ -152,7 +153,7 @@ Stata
 <div class="section level2">
 <h2 id="one-call">One call<a class="anchor" aria-label="anchor" href="#one-call"></a>
 </h2>
-<p>Name the regression, the treatment, the benchmark and, if the data are clustered, the cluster variable. The example is the one in the paper. Chen, Chittoor, and Vissa (2021) find that family CEOs are paid more than professional CEOs: a coefficient of 0.33 on log pay, with standard errors clustered by firm. What would that coefficient be had a variable as strong as CEO tenure been omitted? The code runs as it stands; the data come from the authors’ OSF repository.</p>
+<p>Name the regression, the treatment, the benchmark and, if the data are clustered, the cluster variable. The example is the one in the paper. Chen, Chittoor, and Vissa (2021) find that family CEOs are paid more than professional CEOs: a coefficient of 0.33 on log pay, with standard errors clustered by firm. What would that coefficient be had a variable as strong as CEO tenure been omitted? The code runs as it stands; the data come from the authors’ own OSF repository.</p>
 <div class="lang-tabs">
 <ul class="nav nav-tabs" role="tablist">
 <li class="nav-item" role="presentation">
@@ -203,12 +204,14 @@ Stata
 <span><span class="co">#&gt; ceo_tenure with treatment | X      0.1447       0.380</span></span>
 <span><span class="co">#&gt; ceo_tenure with outcome | D, X     0.0034       0.059</span></span>
 <span><span class="co">#&gt; Implied strength of the omitted variable (sensemakr bounds):</span></span>
-<span><span class="co">#&gt;                    kd   ky R2dz.x R2yz.dx |r_dz.x| |r_yz.dx|</span></span>
-<span><span class="co">#&gt; 1.00x ceo_tenure 1.00 1.00 0.1691  0.0048    0.411     0.070</span></span>
+<span><span class="co">#&gt;                    kd   ky R2dz.x R2yz.dx Impact</span></span>
+<span><span class="co">#&gt; 1.00x ceo_tenure 1.00 1.00 0.1691  0.0048  0.049</span></span>
 <span><span class="co">#&gt; (R2dz.x, R2yz.dx: partial R2 of the omitted variable with the treatment given the</span></span>
-<span><span class="co">#&gt;  covariates, and with the outcome given treatment and covariates; |r| = square root,</span></span>
-<span><span class="co">#&gt;  i.e. the partial-correlation scale of the ITCV. Descriptive only: independent of the</span></span>
-<span><span class="co">#&gt;  variance estimator. No t-implied correlation or threshold is reported.)</span></span></code></pre></div>
+<span><span class="co">#&gt;  covariates, and with the outcome given treatment and covariates. Impact: product of</span></span>
+<span><span class="co">#&gt;  its partial correlations with the outcome and with the treatment, both given the</span></span>
+<span><span class="co">#&gt;  covariates only, i.e. the scale of the ITCV; signed so that the omitted variable</span></span>
+<span><span class="co">#&gt;  biases the estimate away from zero. Descriptive only: independent of the variance</span></span>
+<span><span class="co">#&gt;  estimator, and not a threshold.)</span></span></code></pre></div>
 </div>
 <div id="paper-stata" class="tab-pane" role="tabpanel" aria-labelledby="paper-stata-tab">
 <div class="sourceCode" id="cb4"><pre class="sourceCode stata"><code class="sourceCode stata"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="kw">global</span> osf <span class="st">"https://osf.io/download/stk7y/?view_only=885d1ed5498c4b3c8a1194882e468286"</span></span>
@@ -243,18 +246,20 @@ Benchmark: ceo_tenure
   with lg_ceopay | owner_ceo, X                      0.0034             0.059
 ------------------------------------------------------------------------------
 Implied strength of the omitted variable (sensemakr bounds):
-     kd      ky      R2dz.x     R2yz.dx    |r_dz.x|   |r_yz.dx|
-   1.00    1.00       0.1691     0.0048      0.411      0.070
+     kd      ky      R2dz.x     R2yz.dx     Impact
+   1.00    1.00       0.1691     0.0048      0.049
 ------------------------------------------------------------------------------
 Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
       treatment given the covariates (with the outcome given treatment
-      and covariates). |r| = square root, i.e. the partial-correlation
-      scale of the ITCV. Descriptive only: no t-implied correlation or
-      threshold is reported.</code></pre>
+      and covariates). Impact = product of its partial correlations with
+      the outcome and with the treatment, both given the covariates only:
+      the scale of the ITCV; signed so that the omitted variable biases
+      the estimate away from zero. Descriptive only: independent of the
+      variance estimator, and not a threshold.</code></pre>
 </div>
 </div>
 </div>
-<p>The first table is the answer. The adjusted coefficient is 0.25, and its bootstrap confidence interval, from −0.01 to 0.49 in the Stata run, includes zero: the published effect would no longer be statistically significant at the 5 percent level if an omitted variable as strong as CEO tenure were at work. The block below the table states how strong that is, as partial R<sup>2</sup> values and partial correlations. R and Stata draw different random numbers, so their bootstrap results agree up to simulation error.</p>
+<p>The first table is the answer. The adjusted coefficient is 0.25, and its bootstrap confidence interval, from −0.01 to 0.49 in the Stata run, includes zero: the published effect would no longer be statistically significant at the 5 percent level if an omitted variable as strong as CEO tenure were at work. The block below the table states how strong that is, as partial R<sup>2</sup> values and as the omitted variable’s impact on the ITCV scale. R and Stata draw different random numbers, so their bootstrap results agree up to simulation error.</p>
 </div>
 <div class="section level2">
 <h2 id="what-you-get">What you get<a class="anchor" aria-label="anchor" href="#what-you-get"></a>
@@ -262,7 +267,7 @@ Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
 <div class="home-features">
 <p><strong>Inference that matches your design.</strong> Rows, whole clusters, two cluster dimensions (R) or strata are resampled, the way you would choose standard errors for the regression itself.</p>
 <p><strong>The breakdown point.</strong> Give several multiples of the benchmark at once and see at which strength the adjusted effect stops being statistically significant.</p>
-<p><strong>The benchmark in plain numbers.</strong> Its partial R<sup>2</sup> with treatment and outcome, and the strength of the omitted variable this implies, on the correlation scale that users of the ITCV know.</p>
+<p><strong>The benchmark in plain numbers.</strong> Its partial R<sup>2</sup> with treatment and outcome, and the strength of the omitted variable this implies, as partial R<sup>2</sup> values and as the impact, the product of correlations that users of the ITCV know.</p>
 <p><strong>A check on the bootstrap itself.</strong> Failed replications are reported, and a convergence diagnostic shows whether the number of replications was enough.</p>
 </div>
 <figure class="home-figure"><img src="reference/figures/home-breakdown.png" alt="Adjusted estimates with bootstrap confidence intervals for an omitted variable 0.5 to 4 times as strong as the benchmark; the interval first includes zero at 2.5."><figcaption>
@@ -273,14 +278,14 @@ The breakdown point in the <a href="articles/ceo-pay.html">worked example</a>: t
 <h2 id="where-to-go-from-here">Where to go from here<a class="anchor" aria-label="anchor" href="#where-to-go-from-here"></a>
 </h2>
 <div class="home-cards">
-<p><a class="home-card" href="articles/bootmakr.html"><span class="home-card-title">Get started in R</span><span class="home-card-text">Install, run a first analysis, read the output.</span></a> <a class="home-card" href="articles/stata.html"><span class="home-card-title">Get started in Stata</span><span class="home-card-text">The same first analysis with the Stata command.</span></a> <a class="home-card" href="articles/ceo-pay.html"><span class="home-card-title">Worked example</span><span class="home-card-text">The paper’s illustration from standard errors to convergence check, in both languages.</span></a> <a class="home-card" href="articles/benchmark-strength.html"><span class="home-card-title">How strong is the benchmark?</span><span class="home-card-text">What “as strong as” means, in partial R<sup>2</sup> and correlations.</span></a> <a class="home-card" href="articles/clustering.html"><span class="home-card-title">Clustered and stratified data</span><span class="home-card-text">Choosing what the bootstrap resamples.</span></a> <a class="home-card" href="articles/r-and-stata.html"><span class="home-card-title">R and Stata side by side</span><span class="home-card-text">Every argument and option, matched.</span></a></p>
+<p><a class="home-card" href="articles/bootmakr.html"><span class="home-card-title">Get started in R</span><span class="home-card-text">Install, run a first analysis on a small simulated data set, read the output.</span></a> <a class="home-card" href="articles/stata.html"><span class="home-card-title">Get started in Stata</span><span class="home-card-text">The same first analysis with the Stata command.</span></a> <a class="home-card" href="articles/ceo-pay.html"><span class="home-card-title">Worked example</span><span class="home-card-text">The paper’s illustration from standard errors to convergence check, in both languages.</span></a> <a class="home-card" href="articles/why-bootstrap.html"><span class="home-card-title">Why bootstrap?</span><span class="home-card-text">Where the ITCV and analytic sensemakr go wrong with robust standard errors.</span></a> <a class="home-card" href="articles/benchmark-strength.html"><span class="home-card-title">How strong is the benchmark?</span><span class="home-card-text">What “as strong as” means, in partial R<sup>2</sup> and on the ITCV scale.</span></a> <a class="home-card" href="articles/clustering.html"><span class="home-card-title">Clustered and stratified data</span><span class="home-card-text">Choosing what the bootstrap resamples.</span></a> <a class="home-card" href="articles/r-and-stata.html"><span class="home-card-title">R and Stata side by side</span><span class="home-card-text">Every argument and option, matched.</span></a></p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
 <p>If you use <code>bootmakr</code>, please cite the paper it accompanies and the method it builds on.</p>
-<p>Lonati, S., &amp; Wulff, J. N. (2026). <em>Why you should not use the ITCV with robust standard errors (and what to do instead)</em>. SSRN working paper. <a href="https://ssrn.com/abstract=6789678" class="external-link uri">https://ssrn.com/abstract=6789678</a></p>
+<p>Lonati, S., &amp; Wulff, J. N. (2026). Why you should not use the ITCV with robust standard errors (and what to do instead). <em>Academy of Management Proceedings</em>, 2026(1). <a href="https://doi.org/10.5465/AMPROC.2026.247bp" class="external-link uri">https://doi.org/10.5465/AMPROC.2026.247bp</a></p>
 <p>Cinelli, C., &amp; Hazlett, C. (2020). Making sense of sensitivity: Extending omitted variable bias. <em>Journal of the Royal Statistical Society: Series B</em>, 82(1), 39–67. <a href="https://doi.org/10.1111/rssb.12348" class="external-link uri">https://doi.org/10.1111/rssb.12348</a></p>
 <p>Cinelli, C., Ferwerda, J., &amp; Hazlett, C. (2024). sensemakr: Sensitivity analysis tools for OLS in R and Stata. <em>Observational Studies</em>, 10(2), 93–127. <a href="https://doi.org/10.1353/obs.2024.a946583" class="external-link uri">https://doi.org/10.1353/obs.2024.a946583</a></p>
 <p>The example data are from Chen, G., Chittoor, R., &amp; Vissa, B. (2021). Does nepotism run in the family? CEO pay and pay-performance sensitivity in Indian family firms. <em>Strategic Management Journal</em>, 42(7), 1326–1343. <a href="https://doi.org/10.1002/smj.3263" class="external-link uri">https://doi.org/10.1002/smj.3263</a></p>

@@ -24,6 +24,8 @@ global pc_out "`c(pwd)'/output"
 local adodir : environment BOOTMAKR_STATA_DIR
 if "`adodir'" != "" {
     adopath ++ "`adodir'"
+    * the command's example data, for the runs that use them
+    capture copy "`adodir'/firms.dta" "firms.dta", replace
 }
 capture program drop bootmakr
 

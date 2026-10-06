@@ -1,0 +1,236 @@
+
+. 
+end of do-file
+
+. quietly cd "$pc_out/.."
+
+. 
+. * >>> data
+. use firms, clear
+(bootmakr example data: variant of Lonati & Wulff (2026), Table 1)
+
+. * <<<
+. 
+. * >>> ses
+. quietly regress y x c
+
+. lincom x
+
+ ( 1)  x = 0
+
+------------------------------------------------------------------------------
+           y | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+         (1) |   .4445283    .013584    32.72   0.000     .4178977    .4711589
+------------------------------------------------------------------------------
+
+. 
+. quietly regress y x c, vce(cluster firm)
+
+. lincom x
+
+ ( 1)  x = 0
+
+------------------------------------------------------------------------------
+           y | Coefficient  Std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+         (1) |   .4445283   .0405336    10.97   0.000      .364696    .5243607
+------------------------------------------------------------------------------
+
+. * <<<
+. 
+. * >>> itcv
+. quietly regress y x c
+
+. scalar t_conv = _b[x] / _se[x]
+
+. scalar df = e(df_r)
+
+. quietly regress y x c, vce(cluster firm)
+
+. scalar t_rob = _b[x] / _se[x]
+
+. 
+. * the ITCV: t-implied correlation minus the critical one (Frank, 2000)
+. scalar r_crit = invttail(df, .025) / sqrt(invttail(df, .025)^2 + df)
+
+. foreach v in conv rob {
+  2.     scalar r_impl_`v' = t_`v' / sqrt(t_`v'^2 + df)
+  3.     scalar itcv_`v' = (r_impl_`v' - r_crit) / (1 - abs(r_crit))
+  4. }
+
+. display "conventional SE: t-implied correlation = " %5.3f r_impl_conv ///
+>     "   ITCV = " %5.3f itcv_conv
+conventional SE: t-implied correlation = 0.420   ITCV = 0.404
+
+. display "clustered SE:    t-implied correlation = " %5.3f r_impl_rob ///
+>     "   ITCV = " %5.3f itcv_rob "   sqrt(ITCV) = " %5.3f sqrt(itcv_rob)
+clustered SE:    t-implied correlation = 0.153   ITCV = 0.129   sqrt(ITCV) = 0.359
+
+. * <<<
+. 
+. * >>> impact
+. * partial correlations given c, by residualising on c
+. foreach v in x y q {
+  2.     quietly regress `v' c
+  3.     predict double `v'_c, resid
+  4. }
+
+. quietly correlate x_c y_c
+
+. scalar r_xy_c = r(rho)
+
+. quietly correlate x_c q_c
+
+. scalar r_xq_c = r(rho)
+
+. quietly correlate y_c q_c
+
+. scalar r_yq_c = r(rho)
+
+. display "partial correlation of x and y given c: " %5.3f r_xy_c
+partial correlation of x and y given c: 0.420
+
+. display "q with x given c: " %5.3f r_xq_c "   q with y given c: " %5.3f r_yq_c ///
+>     "   impact of q: " %5.3f r_xq_c * r_yq_c
+q with x given c: 0.468   q with y given c: 0.537   impact of q: 0.251
+
+. * <<<
+. 
+. * >>> withq
+. regress y x c q, vce(cluster firm)
+
+Linear regression                               Number of obs     =      5,000
+                                                F(3, 249)         =     199.21
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.4785
+                                                Root MSE          =     .99577
+
+                                 (Std. err. adjusted for 250 clusters in firm)
+------------------------------------------------------------------------------
+             |               Robust
+           y | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+           x |   .2286068    .036788     6.21   0.000     .1561516    .3010621
+           c |    .578841   .0492042    11.76   0.000     .4819316    .6757504
+           q |   .5125708   .0486366    10.54   0.000     .4167793    .6083623
+       _cons |   .0400548   .0455783     0.88   0.380    -.0497133    .1298229
+------------------------------------------------------------------------------
+
+. * <<<
+. 
+. * >>> analytic
+. sensemakr y x c, treat(x) benchmark(c) kd(1)
+
+                                                            DOF    =    4997 
+                                                            q      =    1.00 
+                                                            alpha  =    0.05 
+                                                            reduce =    TRUE
+                                                            H0     =       0
+
+ Treatment      |     Coef.      S.E.      t(H0)    R2yd.x     RV_q    RV_qa
+----------------+-----------------------------------------------------------
+              x |    0.4445    0.0136    32.7244    0.1765   0.3680   0.3507
+
+ Partial R2 of the treatment with the outcome (R2yd.x): 
+ An extreme confounder (orthogonal to the covariates) that explains 100 percent of the 
+ residual variance of the outcome, would need to explain at least 17.65 percent of the 
+ residual variance of the treatment to fully account for the observed estimated effect. 
+ 
+ Robustness Value, q = 1.00 (RV_q): 
+ Unobserved confounders (orthogonal to the covariates) that explain more than 36.80 percent 
+ of the residual variance of both the treatment and the outcome are strong enough to bring 
+ the point estimate to 0 (a bias of 100 percent of the original estimate). Conversely, 
+ unobserved confounders that do not explain more than 36.80 percent of the residual variance 
+ of both the treatment and the outcome are not strong enough to bring the point estimate 
+ to 0. 
+ 
+ Robustness Value, q = 1.00, alpha = 0.05 (RV_qa): 
+ Unobserved confounders (orthogonal to the covariates) that explain more than 35.07 percent 
+ of the residual variance of both the treatment and the outcome are strong enough to bring 
+ the estimate to a range where it is no longer 'statistically different' from 0 (a bias 
+ of 100 percent of the original estimate), at the significance level of alpha = 0.05. Conversely,
+ unobserved confounders that do not explain more than 35.07 percent of the residual variance 
+ of both the treatment and the outcome are not strong enough to bring the estimate to a 
+ range where it is no longer 'statistically different' from 0, at the significance 
+ level of alpha = 0.05 
+ 
+ Bounds on Omitted Variable Bias: 
+ The table shows the maximum strength of unobserved confounders, bounded by a multiple of the 
+ observed explanatory power of the chosen benchmark covariate(s) with the treatment and the outcome.
+
+ Bound                 |   R2dz.x   R2yz.dx     Coef.      S.E.     t(H0)  Lower CI Upper CI 
+-----------------------+----------------------------------------------------------------------
+ 1.00x               c |   0.1673    0.1998    0.2521    0.0133   18.9331    0.2260   0.2782 
+
+
+ Extreme Bound         |   R2dz.x   R2yz.dx     Coef.
+-----------------------+------------------------------ 
+ 1.00x               c |   0.1673    1.0000    0.0141 
+
+. * <<<
+. 
+. tic
+
+. * >>> bootmakr
+. bootmakr y x c, treat(x) benchmark(c) cluster(firm) seed(123)
+
+Bootstrap results                               Number of obs     =     5,000
+                                                Replications      =     1,000
+
+                 (Replications based on 250 clusters in firm)
+------------------------------------------------------------------------------
+             |      Observed    Bootstrap                    Percentile
+             |       Coef.      Std. Err.    P-value    [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+x            |    .2521337      .0742285      0.0040     .0877736    .3766737
+------------------------------------------------------------------------------
+Note: CI is percentile bootstrap confidence interval
+      P-value is bootstrap p-value (H0: x = 0)
+      Benchmark: c, kd = 1, ky = 1
+
+Benchmark strength (descriptive; no standard errors involved)
+------------------------------------------------------------------------------
+Benchmark: c
+                                                 Partial R2    |Partial corr.|
+  with x | X                                         0.1433             0.379
+  with y | x, X                                      0.1248             0.353
+------------------------------------------------------------------------------
+Implied strength of the omitted variable (sensemakr bounds):
+     kd      ky      R2dz.x     R2yz.dx     Impact
+   1.00    1.00       0.1673     0.1998      0.222
+------------------------------------------------------------------------------
+Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
+      treatment given the covariates (with the outcome given treatment
+      and covariates). Impact = product of its partial correlations with
+      the outcome and with the treatment, both given the covariates only:
+      the scale of the ITCV; signed so that the omitted variable biases
+      the estimate away from zero. Descriptive only: independent of the
+      variance estimator, and not a threshold.
+
+. * <<<
+. keep_result bootmakr
+
+. toc bootmakr
+
+. 
+. tic
+
+. * >>> rows
+. quietly bootmakr y x c, treat(x) benchmark(c) seed(123)
+
+. display "observations resampled:  SE = " %6.4f r(se) ///
+>     "   95% CI [" %6.4f r(ci_lower) ", " %6.4f r(ci_upper) "]"
+observations resampled:  SE = 0.0216   95% CI [0.2078, 0.2937]
+
+. * <<<
+. keep_result rows
+
+. toc rows
+
+. 
+. file close res
+
+. file close tim
+
+. log close pc

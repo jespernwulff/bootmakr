@@ -20,24 +20,28 @@ Hazlett, 2020) gives a concrete answer: the coefficient you would have
 obtained had a variable as strong as one of your observed covariates, the
 *benchmark*, been left out of the model.
 
-`bootmakr` wraps that calculation in a bootstrap. In every replication it
-resamples the data (whole clusters when observations are clustered), refits
-the regression and recomputes the bias-adjusted coefficient. You get a
-standard error, a percentile confidence interval and a *p*-value for the
-adjusted coefficient that do not rest on the conventional OLS variance
-formula.
+`bootmakr` wraps that calculation in a bootstrap, as Cinelli, Ferwerda and
+Hazlett (2024, Appendix C) propose. In every replication it resamples the
+data (whole clusters when observations are clustered), refits the
+regression and recomputes the bias-adjusted coefficient. You get a standard
+error, a percentile confidence interval and a *p*-value for the adjusted
+coefficient that do not rest on the conventional OLS variance formula, and
+a statement of how strong the assumed omitted variable is on the scale of
+the ITCV.
 
 ## Why it exists
 
 The impact threshold of a confounding variable (ITCV) is commonly read as the
 smallest product of correlations an omitted variable must have with the
 predictor and with the outcome to overturn a statistically significant
-result. Lonati and Wulff (2026) show that this reading generally breaks down
-when the regression is estimated with heteroskedasticity- or cluster-robust
-standard errors, and propose bootstrap-based `sensemakr` as an alternative.
+result. Lonati and Wulff (2026) show that this reading breaks down when the
+regression is estimated with heteroskedasticity- or cluster-robust standard
+errors, that the analytic confidence interval of `sensemakr` breaks down for
+the same reason, and that bootstrap-based `sensemakr` repairs both.
 `bootmakr` is the software that accompanies the paper. The R package and the
 Stata command implement the same procedure and are documented side by side
-on this site.
+on this site; [Why bootstrap?](articles/why-bootstrap.html) shows the
+argument on a small simulated example.
 
 ## Install
 
@@ -74,7 +78,7 @@ Chittoor, and Vissa (2021) find that family CEOs are paid more than
 professional CEOs: a coefficient of 0.33 on log pay, with standard errors
 clustered by firm. What would that coefficient be had a variable as strong
 as CEO tenure been omitted? The code runs as it stands; the data come from
-the authors' OSF repository.
+the authors' own OSF repository.
 
 <div class="lang-tabs">
 <ul class="nav nav-tabs" role="tablist">
@@ -120,12 +124,14 @@ bootmakr(ceo.model, data = chen, treat = "owner_ceo",
 #> ceo_tenure with treatment | X      0.1447       0.380
 #> ceo_tenure with outcome | D, X     0.0034       0.059
 #> Implied strength of the omitted variable (sensemakr bounds):
-#>                    kd   ky R2dz.x R2yz.dx |r_dz.x| |r_yz.dx|
-#> 1.00x ceo_tenure 1.00 1.00 0.1691  0.0048    0.411     0.070
+#>                    kd   ky R2dz.x R2yz.dx Impact
+#> 1.00x ceo_tenure 1.00 1.00 0.1691  0.0048  0.049
 #> (R2dz.x, R2yz.dx: partial R2 of the omitted variable with the treatment given the
-#>  covariates, and with the outcome given treatment and covariates; |r| = square root,
-#>  i.e. the partial-correlation scale of the ITCV. Descriptive only: independent of the
-#>  variance estimator. No t-implied correlation or threshold is reported.)
+#>  covariates, and with the outcome given treatment and covariates. Impact: product of
+#>  its partial correlations with the outcome and with the treatment, both given the
+#>  covariates only, i.e. the scale of the ITCV; signed so that the omitted variable
+#>  biases the estimate away from zero. Descriptive only: independent of the variance
+#>  estimator, and not a threshold.)
 ```
 
 </div>
@@ -167,14 +173,16 @@ Benchmark: ceo_tenure
   with lg_ceopay | owner_ceo, X                      0.0034             0.059
 ------------------------------------------------------------------------------
 Implied strength of the omitted variable (sensemakr bounds):
-     kd      ky      R2dz.x     R2yz.dx    |r_dz.x|   |r_yz.dx|
-   1.00    1.00       0.1691     0.0048      0.411      0.070
+     kd      ky      R2dz.x     R2yz.dx     Impact
+   1.00    1.00       0.1691     0.0048      0.049
 ------------------------------------------------------------------------------
 Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
       treatment given the covariates (with the outcome given treatment
-      and covariates). |r| = square root, i.e. the partial-correlation
-      scale of the ITCV. Descriptive only: no t-implied correlation or
-      threshold is reported.
+      and covariates). Impact = product of its partial correlations with
+      the outcome and with the treatment, both given the covariates only:
+      the scale of the ITCV; signed so that the omitted variable biases
+      the estimate away from zero. Descriptive only: independent of the
+      variance estimator, and not a threshold.
 ```
 
 </div>
@@ -189,8 +197,9 @@ The first table is the answer. The adjusted coefficient is
 zero: the published effect would no longer be statistically significant at
 the 5 percent level if an omitted variable as strong as CEO tenure were at
 work. The block below the table states how strong that is, as partial R^2^
-values and partial correlations. R and Stata draw different
-random numbers, so their bootstrap results agree up to simulation error.
+values and as the omitted variable's impact on the ITCV scale. R and Stata
+draw different random numbers, so their bootstrap results agree up to
+simulation error.
 
 ## What you get
 
@@ -205,8 +214,9 @@ see at which strength the adjusted effect stops being statistically
 significant.
 
 **The benchmark in plain numbers.** Its partial R^2^ with treatment and
-outcome, and the strength of the omitted variable this implies, on the
-correlation scale that users of the ITCV know.
+outcome, and the strength of the omitted variable this implies, as partial
+R^2^ values and as the impact, the product of correlations that users of the
+ITCV know.
 
 **A check on the bootstrap itself.** Failed replications are reported, and a
 convergence diagnostic shows whether the number of replications was enough.
@@ -223,10 +233,11 @@ convergence diagnostic shows whether the number of replications was enough.
 ## Where to go from here
 
 <div class="home-cards">
-<a class="home-card" href="articles/bootmakr.html"><span class="home-card-title">Get started in R</span><span class="home-card-text">Install, run a first analysis, read the output.</span></a>
+<a class="home-card" href="articles/bootmakr.html"><span class="home-card-title">Get started in R</span><span class="home-card-text">Install, run a first analysis on a small simulated data set, read the output.</span></a>
 <a class="home-card" href="articles/stata.html"><span class="home-card-title">Get started in Stata</span><span class="home-card-text">The same first analysis with the Stata command.</span></a>
 <a class="home-card" href="articles/ceo-pay.html"><span class="home-card-title">Worked example</span><span class="home-card-text">The paper's illustration from standard errors to convergence check, in both languages.</span></a>
-<a class="home-card" href="articles/benchmark-strength.html"><span class="home-card-title">How strong is the benchmark?</span><span class="home-card-text">What "as strong as" means, in partial R<sup>2</sup> and correlations.</span></a>
+<a class="home-card" href="articles/why-bootstrap.html"><span class="home-card-title">Why bootstrap?</span><span class="home-card-text">Where the ITCV and analytic sensemakr go wrong with robust standard errors.</span></a>
+<a class="home-card" href="articles/benchmark-strength.html"><span class="home-card-title">How strong is the benchmark?</span><span class="home-card-text">What "as strong as" means, in partial R<sup>2</sup> and on the ITCV scale.</span></a>
 <a class="home-card" href="articles/clustering.html"><span class="home-card-title">Clustered and stratified data</span><span class="home-card-text">Choosing what the bootstrap resamples.</span></a>
 <a class="home-card" href="articles/r-and-stata.html"><span class="home-card-title">R and Stata side by side</span><span class="home-card-text">Every argument and option, matched.</span></a>
 </div>
@@ -236,9 +247,9 @@ convergence diagnostic shows whether the number of replications was enough.
 If you use `bootmakr`, please cite the paper it accompanies and the method
 it builds on.
 
-Lonati, S., & Wulff, J. N. (2026). *Why you should not use the ITCV with
-robust standard errors (and what to do instead)*. SSRN working paper.
-<https://ssrn.com/abstract=6789678>
+Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
+robust standard errors (and what to do instead). *Academy of Management
+Proceedings*, 2026(1). <https://doi.org/10.5465/AMPROC.2026.247bp>
 
 Cinelli, C., & Hazlett, C. (2020). Making sense of sensitivity: Extending
 omitted variable bias. *Journal of the Royal Statistical Society: Series B*,

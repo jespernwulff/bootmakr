@@ -10,7 +10,7 @@
     
     <a class="navbar-brand me-2" href="../index.html">bootmakr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -31,6 +31,7 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-guides">Guides</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-guides">
+    <a class="dropdown-item" href="../articles/why-bootstrap.html">Why bootstrap?</a>
     <a class="dropdown-item" href="../articles/benchmark-strength.html">How strong is the benchmark?</a>
     <a class="dropdown-item" href="../articles/clustering.html">Clustered and stratified data</a>
     <a class="dropdown-item" href="../articles/r-and-stata.html">R and Stata side by side</a>
@@ -39,7 +40,7 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-reference">Reference</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-reference">
-    <a class="dropdown-item" href="../reference/index.html">R functions</a>
+    <a class="dropdown-item" href="../reference/index.html">R functions and data</a>
     <a class="dropdown-item" href="../articles/stata-help.html">Stata help file</a>
   </div>
 </li>
@@ -70,6 +71,12 @@
       <small>Source: <a href="https://github.com/jespernwulff/bootmakr/blob/HEAD/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.4.0" id="bootmakr-040">bootmakr 0.4.0<a class="anchor" aria-label="anchor" href="#bootmakr-040"></a></h2>
+<ul><li>The benchmark-strength block now reports the <strong>impact</strong> of the assumed omitted variable: the product of its partial correlations with the outcome and with the treatment, both given the covariates only, which is the scale on which the impact threshold of a confounding variable (ITCV) is stated. The outcome correlation is recovered from <code>sensemakr</code>’s bound (which also conditions on the treatment) with the recursion formula for partial correlations, signed so that the omitted variable biases the estimate away from zero (towards zero with <code>reduce = FALSE</code>). The column replaces the two absolute partial correlations in the printed block; both remain in <code>$benchmark_strength$implied</code>, which also gains <code>r_yz.x</code> and <code>impact</code>, and <code>$results</code> gains <code>impact</code>. <code>$benchmark_strength$r_yd.x</code> holds the partial correlation of the outcome with the treatment used in the recursion. Like the rest of the block, the impact is computed from the data alone.</li>
+<li>New example data set <code>firms</code>: a simulated panel of 250 firms observed for 20 years, a variant of the simulated example in Lonati and Wulff (2026), with an observed control <code>c</code> and an unobserved variable <code>q</code> of equal strength, so that “an omitted variable as strong as <code>c</code>” is a variable like <code>q</code> and every answer can be checked. The examples, the vignette and the README use it instead of <code>sensemakr</code>’s Darfur data; the Stata command ships the same data as <code>firms.dta</code>.</li>
+<li>Documentation: the paper is cited as Lonati and Wulff (2026), <em>Academy of Management Proceedings</em>, <a href="https://doi.org/10.5465/AMPROC.2026.247bp" class="external-link uri">https://doi.org/10.5465/AMPROC.2026.247bp</a>, and the bootstrap procedure is credited to Cinelli, Ferwerda and Hazlett (2024, Appendix C). New website article, <em>Why bootstrap?</em>, with the paper’s argument against the ITCV and analytic <code>sensemakr</code> under robust standard errors, and a worked example of what happens when <code>kd</code> is impossibly large.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.3.0" id="bootmakr-030">bootmakr 0.3.0<a class="anchor" aria-label="anchor" href="#bootmakr-030"></a></h2>
 <ul><li>

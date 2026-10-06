@@ -1,2 +1,2 @@
 label	seconds
-converge	   3171.6
+converge	   1647.7

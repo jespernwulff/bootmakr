@@ -13,8 +13,9 @@ that file.
 | Source | Generated | Stata runs it quotes |
 |---|---|---|
 | `vignettes/bootmakr.Rmd.orig` | `vignettes/bootmakr.Rmd` | none |
-| `vignettes/articles/stata.Rmd.orig` | `vignettes/articles/stata.Rmd` | `first-steps` |
+| `vignettes/articles/stata.Rmd.orig` | `vignettes/articles/stata.Rmd` | `getting-started` |
 | `vignettes/articles/ceo-pay.Rmd.orig` | `vignettes/articles/ceo-pay.Rmd` | `first-steps`, `ceo-pay-1`, `ceo-pay-2`, `ceo-pay-3` |
+| `vignettes/articles/why-bootstrap.Rmd.orig` | `vignettes/articles/why-bootstrap.Rmd` | `why-bootstrap` |
 | `vignettes/articles/benchmark-strength.Rmd.orig` | `vignettes/articles/benchmark-strength.Rmd` | none |
 | `vignettes/articles/clustering.Rmd.orig` | `vignettes/articles/clustering.Rmd` | `first-steps` |
 | `vignettes/articles/stata-help.Rmd.orig` | `vignettes/articles/stata-help.Rmd` | `stata-help` |
@@ -29,6 +30,8 @@ hand.
 
    ```
    cd precompute/stata
+   stata -e do getting-started.do
+   stata -e do why-bootstrap.do
    stata -e do first-steps.do
    stata -e do ceo-pay-1.do
    stata -e do ceo-pay-2.do
@@ -39,14 +42,16 @@ hand.
    The runs use the installed `bootmakr`, or the one in the folder named by
    the environment variable `BOOTMAKR_STATA_DIR` (a checkout of
    <https://github.com/jespernwulff/bootmakr-stata>); `stata-help.do` needs
-   that variable. The `ceo-pay` runs read
+   that variable, and `getting-started.do` and `why-bootstrap.do` take the
+   example data `firms.dta` from that folder (it is the same data set as the
+   R package's `firms`). The `ceo-pay` runs read
    `CEO pay project - Data for sharing FINAL.dta`, the data of Chen, Chittoor
    and Vissa (2021), from the folder named by `BOOTMAKR_CHEN_DIR`;
    `first-steps.do` downloads the same file from the authors' OSF
    repository, as the R sources do. Everything the articles quote is written to
    `precompute/stata/output/`: the log (`<run>.txt`), key results, timings
    and graphs. The three `ceo-pay` runs take 10 to 45 minutes each and can
-   run side by side.
+   run side by side; the others take a few minutes.
 
 2. **R.** With the development version of the package installed, from the
    package root:
@@ -57,12 +62,14 @@ hand.
    ```
 
    Chunks with long runs are cached in `precompute/cache/` (not under
-   version control), so only changed chunks are run again. Needs `knitr`,
-   `haven` and `sandwich`, and an internet connection for the example data.
-   Figures are embedded in the generated files; the image files that knitr
-   leaves in `vignettes/figures/` and `vignettes/articles/figures/` are not
-   needed afterwards, except that the home page takes its figure from the
-   worked example.
+   version control), so only changed chunks are run again. **Delete the
+   cache after changing what the package prints**, because the cache holds
+   the chunk output as well. Needs `knitr`, `haven` and `sandwich`, and an
+   internet connection for the Chen et al. data. Figures are embedded in the
+   generated files; the image files that knitr leaves in
+   `vignettes/figures/` and `vignettes/articles/figures/` are not needed
+   afterwards, except that the home page takes its figure from the worked
+   example.
 
 3. **Site.** `pkgdown::build_site()` writes the site to `docs/`, which is
    what GitHub Pages serves.

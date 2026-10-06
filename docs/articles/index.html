@@ -10,7 +10,7 @@
     
     <a class="navbar-brand me-2" href="../index.html">bootmakr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -31,6 +31,7 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-guides">Guides</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-guides">
+    <a class="dropdown-item" href="../articles/why-bootstrap.html">Why bootstrap?</a>
     <a class="dropdown-item" href="../articles/benchmark-strength.html">How strong is the benchmark?</a>
     <a class="dropdown-item" href="../articles/clustering.html">Clustered and stratified data</a>
     <a class="dropdown-item" href="../articles/r-and-stata.html">R and Stata side by side</a>
@@ -39,7 +40,7 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-reference">Reference</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-reference">
-    <a class="dropdown-item" href="../reference/index.html">R functions</a>
+    <a class="dropdown-item" href="../reference/index.html">R functions and data</a>
     <a class="dropdown-item" href="../articles/stata-help.html">Stata help file</a>
   </div>
 </li>
@@ -71,12 +72,12 @@
 
     <div class="section ">
       <h3>Get started</h3>
-      <p class="section-desc"></p><p>Install bootmakr and run a first analysis.</p>
+      <p class="section-desc"></p><p>Install bootmakr and run a first analysis on a small simulated data set.</p>
 
       <dl><dt><a href="bootmakr.html">Get started with bootmakr in R</a></dt>
-        <dd><p>Install the package, run a first bootstrap sensitivity analysis, and read its output.</p>
+        <dd><p>Install the package, run a first bootstrap sensitivity analysis on a small simulated data set, and read its output.</p>
         </dd><dt><a href="stata.html">Get started with bootmakr in Stata</a></dt>
-        <dd><p>Install the command, run a first bootstrap sensitivity analysis, and read its output.</p>
+        <dd><p>Install the command, run a first bootstrap sensitivity analysis on a small simulated data set, and read its output.</p>
       </dd></dl></div>
     <div class="section ">
       <h3>Worked example</h3>
@@ -87,10 +88,12 @@
       </dd></dl></div>
     <div class="section ">
       <h3>Guides</h3>
-      <p class="section-desc"></p><p>What the output means and which options to choose.</p>
+      <p class="section-desc"></p><p>Why the bootstrap is needed, what the output means, and which options to choose.</p>
 
-      <dl><dt><a href="benchmark-strength.html">How strong is the benchmark?</a></dt>
-        <dd><p>What “an omitted variable as strong as the benchmark” means, in partial R-squared values and partial correlations, and where the numbers in the benchmark-strength block come from.</p>
+      <dl><dt><a href="why-bootstrap.html">Why bootstrap?</a></dt>
+        <dd><p>The impact threshold of a confounding variable (ITCV) and the analytic confidence interval of sensemakr break down when the regression calls for robust standard errors. The argument of Lonati and Wulff (2026), shown on the package’s simulated data, and what the bootstrap does instead.</p>
+        </dd><dt><a href="benchmark-strength.html">How strong is the benchmark?</a></dt>
+        <dd><p>What “an omitted variable as strong as the benchmark” means, in partial R-squared values and on the scale of the ITCV, where the numbers in the benchmark-strength block come from, and what happens when the assumed strength is impossible.</p>
         </dd><dt><a href="clustering.html">Clustered and stratified data</a></dt>
         <dd><p>How to choose what the bootstrap resamples: observations, clusters, two cluster dimensions, or units within strata.</p>
         </dd><dt><a href="r-and-stata.html">R and Stata side by side</a></dt>

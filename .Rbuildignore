@@ -20,3 +20,5 @@
 ^precompute$
 ^vignettes/articles$
 \.Rmd\.orig$
+^data-raw$
+^vignettes/figures$

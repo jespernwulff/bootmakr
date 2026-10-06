@@ -1,8 +1,8 @@
 ---
 title: "Get started with bootmakr in R"
 description: >
-  Install the package, run a first bootstrap sensitivity analysis, and read
-  its output.
+  Install the package, run a first bootstrap sensitivity analysis on a small
+  simulated data set, and read its output.
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Get started with bootmakr in R}
@@ -15,17 +15,17 @@ source(file.path(getOption("bootmakr.precompute.dir"), "helpers.R"))
 ```
 
 A regression coefficient from observational data is only as credible as the
-assumption that no important variable was left out. A sensitivity analysis
-asks how strong an omitted variable would have to be to change the
-conclusion. `sensemakr` (Cinelli & Hazlett, 2020) answers with a concrete
-number: the coefficient you would have obtained had a variable as strong as
-one of your observed covariates been omitted.
-
-`bootmakr` adds inference to that number that does not rely on the
-conventional OLS variance formula. It bootstraps the whole procedure, so the
-standard error, confidence interval and *p*-value of the adjusted coefficient
-remain usable when the errors are heteroskedastic or correlated within
-clusters. This page shows a first analysis from start to finish. The same
+assumption that no important variable was left out. `sensemakr` (Cinelli &
+Hazlett, 2020) makes that assumption concrete: it reports the coefficient you
+would have obtained had a variable as strong as one of your observed
+covariates been omitted. `bootmakr` adds a standard error, a confidence
+interval and a *p*-value for that adjusted coefficient, obtained by
+resampling the data the way you would choose standard errors for the
+regression itself. This is needed because the usual tools, the impact
+threshold of a confounding variable (ITCV) and the analytic interval of
+`sensemakr`, break down when the regression calls for robust standard errors
+(Lonati & Wulff, 2026); [Why bootstrap?](https://jespernwulff.github.io/bootmakr/articles/why-bootstrap.html)
+shows why. This page shows a first analysis from start to finish. The same
 steps in Stata are in
 [Get started in Stata](https://jespernwulff.github.io/bootmakr/articles/stata.html).
 
@@ -37,56 +37,56 @@ from CRAN and is installed along with it.
 ```{r install, eval = FALSE}
 # install.packages("remotes")
 remotes::install_github("jespernwulff/bootmakr")
-
-# to read the example data used on this page
-install.packages("haven")
 ```
 
-## The example
+## The example data
 
-We use the data of Chen, Chittoor, and Vissa (2021), who ask whether CEOs
-that belong to the family controlling the firm are paid more than
-professional CEOs. The authors share their data on OSF, and `haven` reads
-the file from there.
+The package comes with `firms`, a simulated panel of 250 firms observed for
+20 years. Because the data are simulated, we know the truth: the effect of
+`x` on `y` is 0.25. Two firm-level characteristics affect both `x` and `y`,
+an observed control `c` and a variable `q` that we pretend not to have. The
+within-firm components of `x` and of the disturbance are persistent, so
+standard errors must be clustered by firm. (The data are a variant of the
+simulated example in Lonati and Wulff, 2026; see `?firms` for how they were
+generated.)
 
 ```{r data}
 library(bootmakr)
-library(haven)
-
-osf  <- "https://osf.io/download/stk7y/?view_only=885d1ed5498c4b3c8a1194882e468286"
-chen <- read_dta(osf)
-
-ceo.model <- lg_ceopay ~ owner_ceo + ceo_tenure + PA_nic3_med + ceo_edu_dummy +
-  lg_sales + firm_age + promoters_pct + institutions_pct +
-  factor(year) + factor(nic_code_1digit)
-
-coef(lm(ceo.model, data = chen))["owner_ceo"]
+data("firms")
+head(firms)
 ```
 
-The data hold 2,011 firm-year observations of 277 Indian firms. `lg_ceopay`
-is the logarithm of total CEO pay, `owner_ceo` indicates a family CEO, and
-the remaining variables are controls: CEO tenure and education, firm sales
-and age, ownership shares, and year and industry indicators. The coefficient
-of `owner_ceo` is the published one (Model 2 of their Table 2). Family CEOs
-earn more.
+Here is the regression a researcher without `q` would run.
+
+```{r naive}
+coef(lm(y ~ x + c, data = firms))["x"]
+```
+
+```{r naive-numbers, include = FALSE}
+b0 <- coef(lm(y ~ x + c, data = firms))[["x"]]
+```
+
+The coefficient is `r num(b0)` instead of 0.25, because `q` drives both `x`
+and `y`. With real data you would not know this. What you can ask is how the
+result would change if a variable as strong as something you *do* observe
+had been left out. That is the question `bootmakr` answers.
 
 ## A first analysis
 
-Could an omitted variable explain this away? To answer, `sensemakr` needs a
-*benchmark*: an observed covariate that sets the scale for the omitted
-variable. We take the age of the firm and ask what the coefficient of
-`owner_ceo` would be had a variable *as strong as* `firm_age` been omitted.
+`sensemakr` needs a *benchmark*: an observed covariate that sets the scale
+for the omitted variable. We take `c` and ask what the coefficient of `x`
+would be had a variable *as strong as* `c` been omitted. In these data that
+is exactly what `q` is.
 
 ```{r first, cache = TRUE}
-first <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
-                  benchmark_covariates = "firm_age",
-                  cluster = "co_code",
+first <- bootmakr(y ~ x + c, data = firms, treat = "x",
+                  benchmark_covariates = "c",
+                  cluster = "firm",
                   seed = 123, progress = FALSE)
 first
 ```
 
 ```{r first-numbers, include = FALSE}
-b0 <- coef(lm(ceo.model, data = chen))[["owner_ceo"]]
 r1 <- first$results
 ob <- first$benchmark_strength$observed
 im <- first$benchmark_strength$implied
@@ -99,14 +99,15 @@ independent, the variable that identifies the clusters to resample
 exactly as strong as the benchmark (`kd = 1`) and 1,000 bootstrap
 replications. `seed` makes the result reproducible, and `progress = FALSE`
 switches off the progress bar, which is useful on screen but not in a
-document. The run takes about 20 seconds.
+document. The run takes about 15 seconds.
 
 ### Reading the output
 
-**The adjusted estimate.** Had a variable as strong as `firm_age` been
-omitted, the coefficient of `owner_ceo` would be `r num(r1$estimate, 3)`
-rather than `r num(b0, 3)`. This is the estimate `sensemakr` reports for the
-same benchmark. It does not involve the bootstrap.
+**The adjusted estimate.** Had a variable as strong as `c` been omitted, the
+coefficient of `x` would be `r num(r1$estimate, 3)` rather than
+`r num(b0, 3)`. This is the estimate `sensemakr` reports for the same
+benchmark, and it is close to the true 0.25. It does not involve the
+bootstrap.
 
 **Its uncertainty.** The remaining columns come from the bootstrap. In each
 of the 1,000 replications `bootmakr` draws firms with replacement, refits the
@@ -115,38 +116,37 @@ those 1,000 values is the standard error (`r num(r1$se, 3)`), their 2.5th and
 97.5th percentiles form the 95 percent confidence interval
 (`r num(r1$ci_lower, 3)` to `r num(r1$ci_upper, 3)`), and the *p*-value
 (`r num(r1$pvalue, 3, lead = FALSE)`) is twice the smaller of the two shares
-of replications that fall on either side of zero. The pay premium of family
-CEOs remains positive and statistically distinguishable from zero even if an
-omitted variable as strong as firm age is at work.
+of replications that fall on either side of zero. The effect of `x` remains
+positive and statistically distinguishable from zero even if an omitted
+variable as strong as `c` is at work.
 
-**The benchmark strength.** The last block says what "as strong as
-`firm_age`" means. Firm age explains `r num(100 * ob$r2dxj.x, 1)` percent of
-the variance of the treatment that the other covariates leave unexplained and
-`r num(100 * ob$r2yxj.dx, 1)` percent of the remaining variance of the
-outcome, which correspond to partial correlations of
-`r num(ob$r_dxj.x, 2, lead = FALSE)` and `r num(ob$r_yxj.dx, 2, lead = FALSE)`.
-The second table gives the strength of the omitted variable these numbers
-imply. All of this is computed from the data. No standard error is involved,
-so the block is the same whatever variance estimator you prefer. See
+**The benchmark strength.** The last block says what "as strong as `c`"
+means. `c` explains `r num(100 * ob$r2dxj.x, 1)` percent of the variance of
+`x` and `r num(100 * ob$r2yxj.dx, 1)` percent of the variance of `y` that
+`x` leaves unexplained. The omitted variable this implies has an *impact* of
+`r num(im$impact, 2, lead = FALSE)`: the product of its partial correlations
+with `y` and with `x`, which is the scale on which the ITCV is stated. All of
+this is computed from the data. No standard error is involved, so the block
+is the same whatever variance estimator you prefer. See
 [How strong is the benchmark?](https://jespernwulff.github.io/bootmakr/articles/benchmark-strength.html)
 for the details.
 
 ## From one strength to many: the breakdown point
 
-An omitted variable as strong as firm age does not overturn the result. How
-much stronger would it have to be? Give `kd` several values and `bootmakr`
+An omitted variable as strong as `c` does not overturn the result. How much
+stronger would it have to be? Give `kd` several values and `bootmakr`
 evaluates each of them on the same bootstrap samples.
 
 ```{r sweep, cache = TRUE}
-sweep <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
-                  benchmark_covariates = "firm_age",
-                  kd = seq(0.5, 4, by = 0.5),
-                  cluster = "co_code",
+sweep <- bootmakr(y ~ x + c, data = firms, treat = "x",
+                  benchmark_covariates = "c",
+                  kd = seq(0.5, 1.5, by = 0.25),
+                  cluster = "firm",
                   seed = 123, progress = FALSE)
 sweep
 ```
 
-```{r sweep-plot, fig.cap = "Adjusted estimate and bootstrap 95 percent confidence interval for an omitted variable 0.5 to 4 times as strong as firm age. Solid markers: p < .05."}
+```{r sweep-plot, fig.cap = "Adjusted estimate and bootstrap 95 percent confidence interval for an omitted variable 0.5 to 1.5 times as strong as c. Solid markers: p < .05."}
 plot(sweep, type = "kd_sweep")
 ```
 
@@ -158,18 +158,31 @@ first_not <- min(rs$kd[rs$pvalue >= 0.05])
 
 The adjusted estimate shrinks as the assumed omitted variable grows stronger,
 and its confidence interval widens. In this run the result holds up to an
-omitted variable `r last_sig` times as strong as firm age and breaks down at
+omitted variable `r last_sig` times as strong as `c` and breaks down at
 `r first_not` times: from there on the interval includes zero. That
 *breakdown point* is a compact summary of how robust the finding is. (A
 *p*-value printed as 0 means that none of the 1,000 replications fell on the
 other side of zero.)
 
-A *p*-value this close to .05 can fall on either side of it from one seed to
-the next when only 1,000 replications are drawn. Before reporting a
-breakdown point, increase `reps` and check that the result has settled. The
-[worked example](https://jespernwulff.github.io/bootmakr/articles/ceo-pay.html)
-repeats this sweep with 10,000 replications and puts the breakdown point at
-2.5.
+## Checking the answer
+
+Simulated data have one advantage over real ones: the omitted variable is in
+the file. The regression that includes `q` gives
+
+```{r check}
+coef(lm(y ~ x + c + q, data = firms))["x"]
+```
+
+```{r check-numbers, include = FALSE}
+bq <- coef(lm(y ~ x + c + q, data = firms))[["x"]]
+covered <- r1$ci_lower < bq && bq < r1$ci_upper
+if (!covered) stop("The interval at kd = 1 no longer covers the with-q coefficient: revise the text.")
+```
+
+which lies inside the bootstrap interval at `kd = 1`. The
+[Why bootstrap?](https://jespernwulff.github.io/bootmakr/articles/why-bootstrap.html)
+article uses the same data to show what the ITCV and the analytic interval
+of `sensemakr` make of this example.
 
 ## Working with the results
 
@@ -181,7 +194,8 @@ sweep$results
 
 `estimate` to `pvalue` are the columns of the printed table. `r2dz.x` and
 `r2yz.dx` are the partial R^2^ values of the omitted variable assumed in each
-row. The benchmark-strength block is stored as a list of two data frames.
+row, and `impact` its impact. The benchmark-strength block is stored as a
+list.
 
 ```{r strength}
 first$benchmark_strength
@@ -226,23 +240,27 @@ has settled with the `converge` argument.
 ## Where next
 
 - The [worked example](https://jespernwulff.github.io/bootmakr/articles/ceo-pay.html)
-  takes the same study through a complete analysis: the choice of standard
-  errors, a stronger benchmark, a grouped benchmark and the convergence
-  check.
-- `?bootmakr` documents every argument, `?plot.bootmakr` the three plots.
+  takes a published study through a complete analysis: the choice of
+  standard errors, the benchmark, the breakdown point, a grouped benchmark
+  and the convergence check.
+- [Why bootstrap?](https://jespernwulff.github.io/bootmakr/articles/why-bootstrap.html)
+  shows, on these data, why the ITCV and the analytic interval of
+  `sensemakr` cannot be trusted with robust standard errors.
+- `?bootmakr` documents every argument, `?plot.bootmakr` the three plots,
+  and `?firms` the data.
 - The Stata command of the same name runs the same analysis. See
   [R and Stata side by side](https://jespernwulff.github.io/bootmakr/articles/r-and-stata.html).
 
 ## References
 
-Chen, G., Chittoor, R., & Vissa, B. (2021). Does nepotism run in the family?
-CEO pay and pay-performance sensitivity in Indian family firms. *Strategic
-Management Journal*, 42(7), 1326--1343. <https://doi.org/10.1002/smj.3263>
-
 Cinelli, C., & Hazlett, C. (2020). Making sense of sensitivity: Extending
 omitted variable bias. *Journal of the Royal Statistical Society: Series B*,
 82(1), 39--67. <https://doi.org/10.1111/rssb.12348>
 
-Lonati, S., & Wulff, J. N. (2026). *Why you should not use the ITCV with
-robust standard errors (and what to do instead)*. SSRN working paper.
-<https://ssrn.com/abstract=6789678>
+Cinelli, C., Ferwerda, J., & Hazlett, C. (2024). sensemakr: Sensitivity
+analysis tools for OLS in R and Stata. *Observational Studies*, 10(2),
+93--127. <https://doi.org/10.1353/obs.2024.a946583>
+
+Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
+robust standard errors (and what to do instead). *Academy of Management
+Proceedings*, 2026(1). <https://doi.org/10.5465/AMPROC.2026.247bp>

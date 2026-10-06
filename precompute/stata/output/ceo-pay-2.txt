@@ -45,21 +45,23 @@ Benchmark: firm_age
   with lg_ceopay | owner_ceo, X                      0.0023             0.047
 ------------------------------------------------------------------------------
 Implied strength of the omitted variable (sensemakr bounds):
-     kd      ky      R2dz.x     R2yz.dx    |r_dz.x|   |r_yz.dx|
-   0.50    0.50       0.0205     0.0012      0.143      0.035
-   1.00    1.00       0.0410     0.0024      0.202      0.049
-   1.50    1.50       0.0615     0.0037      0.248      0.061
-   2.00    2.00       0.0820     0.0049      0.286      0.070
-   2.50    2.50       0.1025     0.0062      0.320      0.078
-   3.00    3.00       0.1229     0.0074      0.351      0.086
-   3.50    3.50       0.1434     0.0087      0.379      0.093
-   4.00    4.00       0.1639     0.0099      0.405      0.100
+     kd      ky      R2dz.x     R2yz.dx     Impact
+   0.50    0.50       0.0205     0.0012      0.008
+   1.00    1.00       0.0410     0.0024      0.015
+   1.50    1.50       0.0615     0.0037      0.023
+   2.00    2.00       0.0820     0.0049      0.030
+   2.50    2.50       0.1025     0.0062      0.038
+   3.00    3.00       0.1229     0.0074      0.045
+   3.50    3.50       0.1434     0.0087      0.052
+   4.00    4.00       0.1639     0.0099      0.059
 ------------------------------------------------------------------------------
 Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
       treatment given the covariates (with the outcome given treatment
-      and covariates). |r| = square root, i.e. the partial-correlation
-      scale of the ITCV. Descriptive only: no t-implied correlation or
-      threshold is reported.
+      and covariates). Impact = product of its partial correlations with
+      the outcome and with the treatment, both given the covariates only:
+      the scale of the ITCV; signed so that the omitted variable biases
+      the estimate away from zero. Descriptive only: independent of the
+      variance estimator, and not a threshold.
 
 . * <<<
 . keep_sweep sweep 0.5 1 1.5 2 2.5 3 3.5 4
@@ -102,18 +104,20 @@ Benchmark: ceo_tenure+ceo_edu_dummy
   with lg_ceopay | owner_ceo, X                      0.0293             0.171
 ------------------------------------------------------------------------------
 Implied strength of the omitted variable (sensemakr bounds):
-     kd      ky      R2dz.x     R2yz.dx    |r_dz.x|   |r_yz.dx|
-   0.10    0.10       0.0170     0.0041      0.130      0.064
-   0.20    0.20       0.0339     0.0082      0.184      0.090
-   0.30    0.30       0.0509     0.0123      0.226      0.111
-   0.40    0.40       0.0679     0.0165      0.260      0.128
-   0.50    0.50       0.0848     0.0207      0.291      0.144
+     kd      ky      R2dz.x     R2yz.dx     Impact
+   0.10    0.10       0.0170     0.0041      0.011
+   0.20    0.20       0.0339     0.0082      0.021
+   0.30    0.30       0.0509     0.0123      0.031
+   0.40    0.40       0.0679     0.0165      0.041
+   0.50    0.50       0.0848     0.0207      0.052
 ------------------------------------------------------------------------------
 Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
       treatment given the covariates (with the outcome given treatment
-      and covariates). |r| = square root, i.e. the partial-correlation
-      scale of the ITCV. Descriptive only: no t-implied correlation or
-      threshold is reported.
+      and covariates). Impact = product of its partial correlations with
+      the outcome and with the treatment, both given the covariates only:
+      the scale of the ITCV; signed so that the omitted variable biases
+      the estimate away from zero. Descriptive only: independent of the
+      variance estimator, and not a threshold.
 
 . * <<<
 . keep_sweep grouped 0.1 0.2 0.3 0.4 0.5
