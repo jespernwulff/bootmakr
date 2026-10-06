@@ -44,6 +44,8 @@ navbar:
     guides:
       text: Guides
       menu:
+      - text: Why bootstrap?
+        href: articles/why-bootstrap.html
       - text: How strong is the benchmark?
         href: articles/benchmark-strength.html
       - text: Clustered and stratified data
@@ -53,7 +55,7 @@ navbar:
     reference:
       text: Reference
       menu:
-      - text: R functions
+      - text: R functions and data
         href: reference/index.html
       - text: Stata help file
         href: articles/stata-help.html
@@ -71,7 +73,7 @@ navbar:
 
 articles:
 - title: Get started
-  desc: Install bootmakr and run a first analysis.
+  desc: Install bootmakr and run a first analysis on a small simulated data set.
   contents:
   - bootmakr
   - articles/stata
@@ -80,8 +82,9 @@ articles:
   contents:
   - articles/ceo-pay
 - title: Guides
-  desc: What the output means and which options to choose.
+  desc: Why the bootstrap is needed, what the output means, and which options to choose.
   contents:
+  - articles/why-bootstrap
   - articles/benchmark-strength
   - articles/clustering
   - articles/r-and-stata
@@ -97,6 +100,9 @@ reference:
   contents:
   - print.bootmakr
   - plot.bootmakr
+- title: Example data
+  contents:
+  - firms
 
 footer:
   structure:

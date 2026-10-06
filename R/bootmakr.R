@@ -25,10 +25,23 @@
 #' \strong{benchmark strength}: the partial R2 of the benchmark with the
 #' treatment (given the other covariates) and with the outcome (given the
 #' treatment and the covariates), and sensemakr's implied bound on the
-#' omitted variable at each \code{kd}, together with their square roots
-#' (absolute partial correlations). These are functions of the data alone.
-#' No standard error enters them, so they do not depend on the variance
-#' estimator. They are stored in \code{$benchmark_strength}.
+#' omitted variable at each \code{kd}. For the omitted variable it also
+#' reports its \strong{impact}, the product of its partial correlations with
+#' the outcome and with the treatment, both given the covariates only. This
+#' is the scale on which the impact threshold of a confounding variable
+#' (ITCV) is stated, so a reader used to the ITCV can judge how strong the
+#' assumed omitted variable is. The partial correlation with the outcome
+#' given the covariates is recovered from sensemakr's bound (which conditions
+#' on the treatment as well) with the recursion formula for partial
+#' correlations, with the signs set so that the omitted variable biases the
+#' estimate away from zero (towards zero when \code{reduce = FALSE}). All of
+#' these are functions of the data alone. No standard error enters them, so
+#' they do not depend on the variance estimator, and none of them is a
+#' threshold. They are stored in \code{$benchmark_strength}.
+#'
+#' The bootstrap procedure follows Cinelli, Ferwerda and Hazlett (2024,
+#' Appendix C); Lonati and Wulff (2026) show why it is needed when the
+#' regression calls for robust standard errors.
 #'
 #' @param formula A formula for the OLS regression: outcome on the left,
 #'   treatment and covariates on the right.
@@ -85,14 +98,18 @@
 #'   \describe{
 #'     \item{\code{results}}{data frame with one row per \code{kd}: adjusted
 #'       \code{estimate}, bootstrap \code{se}, \code{ci_lower},
-#'       \code{ci_upper}, \code{pvalue}, and the implied strength of the
+#'       \code{ci_upper}, \code{pvalue}, the implied strength of the
 #'       omitted variable (\code{r2dz.x}, \code{r2yz.dx}) the row is based
-#'       on.}
+#'       on, and its \code{impact}.}
 #'     \item{\code{benchmark_strength}}{list with \code{$observed} (partial
 #'       R2 of the benchmark with treatment and outcome, and their square
-#'       roots) and \code{$implied} (sensemakr's bound on the omitted
-#'       variable at each \code{kd}/\code{ky}, and the corresponding
-#'       absolute partial correlations).}
+#'       roots), \code{$implied} (sensemakr's bound on the omitted variable
+#'       at each \code{kd}/\code{ky}: \code{r2dz.x}, \code{r2yz.dx}, their
+#'       square roots \code{r_dz.x}, \code{r_yz.dx}, the partial correlation
+#'       with the outcome given the covariates only, \code{r_yz.x}, and the
+#'       \code{impact}, \code{r_yz.x * r_dz.x}) and \code{$r_yd.x} (the
+#'       partial correlation of the outcome with the treatment given the
+#'       covariates, used in that recursion).}
 #'     \item{\code{boot_samples}}{matrix of bootstrap draws of the adjusted
 #'       estimate, one column per \code{kd} (a list of three such matrices
 #'       with two-way clustering).}
@@ -120,34 +137,40 @@
 #' 10(2), 93-127.
 #'
 #' Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
-#' robust standard errors (and what to do instead). SSRN working paper.
-#' \url{https://ssrn.com/abstract=6789678}
+#' robust standard errors (and what to do instead). \emph{Academy of
+#' Management Proceedings}, 2026(1).
+#' \doi{10.5465/AMPROC.2026.247bp}
 #'
 #' @seealso \code{\link{print.bootmakr}}, \code{\link{plot.bootmakr}},
-#'   \code{\link[sensemakr]{sensemakr}}
+#'   \code{\link{firms}}, \code{\link[sensemakr]{sensemakr}}
 #'
 #' @examples
-#' data("darfur", package = "sensemakr")
-#'
-#' # An omitted variable as strong as `female` (kd = 1, the default);
-#' # villages are resampled as whole clusters. 100 replications keep the
-#' # example quick; use 1,000 or more in practice.
-#' out <- bootmakr(
-#'   peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
-#'     pastvoted + hhsize_darfur + female + village,
-#'   data = darfur, treat = "directlyharmed",
-#'   benchmark_covariates = "female",
-#'   cluster = "village", reps = 100, seed = 1, progress = FALSE
-#' )
+#' # Simulated firm panel: the true effect of x on y is 0.25, and a firm-level
+#' # variable q, omitted here, biases the regression of y on x and c (see
+#' # ?firms). An omitted variable as strong as the observed control c (kd = 1,
+#' # the default); firms are resampled as whole clusters. 200 replications
+#' # keep the example quick; use 1,000 or more in practice.
+#' data("firms", package = "bootmakr")
+#' out <- bootmakr(y ~ x + c, data = firms, treat = "x",
+#'                 benchmark_covariates = "c", cluster = "firm",
+#'                 reps = 200, seed = 1, progress = FALSE)
 #' out
 #'
-#' # Benchmark strength on the partial-R2 and partial-correlation scales
+#' # The strength of the benchmark and of the omitted variable it implies,
+#' # with the impact of the latter on the scale of the ITCV
 #' out$benchmark_strength
+#'
+#' # Several strengths at once: where does the effect stop being significant?
+#' sweep <- bootmakr(y ~ x + c, data = firms, treat = "x",
+#'                   benchmark_covariates = "c", kd = c(0.5, 1, 1.5, 2),
+#'                   cluster = "firm", reps = 200, seed = 1, progress = FALSE)
+#' sweep$results
+#' plot(sweep, type = "kd_sweep")
 #'
 #' @importFrom sensemakr sensemakr group_partial_r2 ovb_partial_r2_bound adjusted_estimate partial_r2 ovb_bounds
 #' @importFrom grDevices adjustcolor
 #' @importFrom graphics abline hist legend mtext par plot points segments
-#' @importFrom stats complete.cases lm model.matrix nobs pnorm qnorm quantile reformulate sd terms var
+#' @importFrom stats coef complete.cases lm model.matrix nobs pnorm qnorm quantile reformulate sd terms var
 #' @importFrom utils setTxtProgressBar txtProgressBar
 #'
 #' @export
@@ -233,7 +256,7 @@ bootmakr <- function(formula,
   bench_strength <- .benchmark_strength(
     fit_orig, data, formula, treat, weight_vec,
     benchmark_covariates, gbenchmark_covariates,
-    kd, ky, r2dz.x, r2yz.dx, bound_label
+    kd, ky, r2dz.x, r2yz.dx, bound_label, reduce
   )
 
   # ---- Set up resampling ----
@@ -460,15 +483,20 @@ bootmakr <- function(formula,
 #'              group): r2dxj.x, r2yxj.dx and their square roots r_dxj.x,
 #'              r_yxj.dx (absolute partial correlations). NULL for "manual".
 #'   $implied   data.frame, one row per benchmark x kd: kd, ky, r2dz.x, r2yz.dx
-#'              (sensemakr's bound on the omitted variable's strength) and
-#'              their square roots r_dz.x, r_yz.dx.
+#'              (sensemakr's bound on the omitted variable's strength), their
+#'              square roots r_dz.x, r_yz.dx, the partial correlation with the
+#'              outcome given the covariates only, r_yz.x, and the impact
+#'              r_yz.x * r_dz.x (see .impact()).
+#'   $r_yd.x    signed partial correlation of the outcome with the treatment
+#'              given the covariates (from the fitted model).
 #' All quantities are functions of the data alone (no standard errors), so
 #' they are unaffected by heteroskedasticity- or cluster-robust inference.
 #' Nothing here is a t-implied correlation or a threshold.
 #' @noRd
 .benchmark_strength <- function(fit, data, formula, treat, weight_vec,
                                 benchmark_covariates, gbenchmark_covariates,
-                                kd, ky, r2dz.x, r2yz.dx, bound_label) {
+                                kd, ky, r2dz.x, r2yz.dx, bound_label,
+                                reduce = TRUE) {
   n_kd <- length(kd)
   out  <- tryCatch({
     if (!is.null(gbenchmark_covariates)) {
@@ -517,9 +545,19 @@ bootmakr <- function(formula,
   }, error = function(e) list(type = "unavailable", observed = NULL, implied = NULL,
                               error = conditionMessage(e)))
 
+  # Partial correlation of the outcome with the treatment given the
+  # covariates (signed), needed to put the omitted variable on the ITCV scale.
+  out$r_yd.x <- tryCatch({
+    b <- coef(fit)[[treat]]
+    unname(sign(b) * sqrt(sensemakr::partial_r2(fit, covariates = treat)))
+  }, error = function(e) NA_real_)
+
   if (!is.null(out$implied)) {
     out$implied$r_dz.x  <- sqrt(out$implied$r2dz.x)
     out$implied$r_yz.dx <- sqrt(out$implied$r2yz.dx)
+    imp <- .impact(out$implied$r2dz.x, out$implied$r2yz.dx, out$r_yd.x, reduce)
+    out$implied$r_yz.x  <- imp$r_yz.x
+    out$implied$impact  <- imp$impact
     rownames(out$implied) <- NULL
   }
   if (!is.null(out$observed)) {
@@ -530,20 +568,46 @@ bootmakr <- function(formula,
   out
 }
 
-#' Attach the implied r2dz.x / r2yz.dx of each kd row to the results table
-#' (first benchmark's rows, matching the adjusted estimates).
+#' Impact of the omitted variable on the scale of the ITCV.
+#'
+#' The ITCV is stated as a product of the omitted variable's partial
+#' correlations with the outcome and with the treatment, both given the
+#' covariates only. sensemakr's r2yz.dx conditions on the treatment as well,
+#' so the outcome correlation is recovered with the recursion formula for
+#' partial correlations,
+#'   r_yz.x = r_yz.dx * sqrt((1 - r_yd.x^2) (1 - r_dz.x^2)) + r_yd.x * r_dz.x,
+#' where r_yd.x is the partial correlation of outcome and treatment given the
+#' covariates. sensemakr's bounds identify magnitudes only. The sign of the
+#' hypothetical variable is arbitrary, so r_dz.x is taken positive, and
+#' r_yz.dx gets the sign of r_yd.x: the omitted variable then biases the
+#' estimate away from zero, which is what sensemakr's adjustment with
+#' reduce = TRUE removes. With reduce = FALSE the sign is reversed.
+#' @noRd
+.impact <- function(r2dz.x, r2yz.dx, r_yd.x, reduce = TRUE) {
+  r_dz.x  <- sqrt(r2dz.x)
+  s       <- if (isTRUE(reduce)) sign(r_yd.x) else -sign(r_yd.x)
+  r_yz.dx <- s * sqrt(r2yz.dx)
+  r_yz.x  <- r_yz.dx * sqrt((1 - r_yd.x^2) * (1 - r2dz.x)) + r_yd.x * r_dz.x
+  list(r_yz.x = r_yz.x, impact = r_yz.x * r_dz.x)
+}
+
+#' Attach the implied r2dz.x / r2yz.dx and the impact of each kd row to the
+#' results table (first benchmark's rows, matching the adjusted estimates).
 #' @noRd
 .attach_r2 <- function(results, bs, n_kd) {
   results$r2dz.x  <- NA_real_
   results$r2yz.dx <- NA_real_
+  results$impact  <- NA_real_
   imp <- bs$implied
   if (is.null(imp) || nrow(imp) == 0) return(results)
   if (identical(bs$type, "manual")) {
     results$r2dz.x  <- imp$r2dz.x[1]
     results$r2yz.dx <- imp$r2yz.dx[1]
+    results$impact  <- imp$impact[1]
   } else if (nrow(imp) >= n_kd) {
     results$r2dz.x  <- imp$r2dz.x[seq_len(n_kd)]
     results$r2yz.dx <- imp$r2yz.dx[seq_len(n_kd)]
+    results$impact  <- imp$impact[seq_len(n_kd)]
   }
   results
 }
@@ -578,16 +642,18 @@ bootmakr <- function(formula,
     cat("Implied strength of the omitted variable (sensemakr bounds):\n")
     tab2 <- data.frame(kd = f2(imp$kd), ky = f2(imp$ky),
                        `R2dz.x` = f4(imp$r2dz.x), `R2yz.dx` = f4(imp$r2yz.dx),
-                       `|r_dz.x|` = f3(imp$r_dz.x), `|r_yz.dx|` = f3(imp$r_yz.dx),
+                       Impact = f3(imp$impact),
                        check.names = FALSE, stringsAsFactors = FALSE)
     rownames(tab2) <- if (identical(bs$type, "manual")) imp$benchmark else
       make.unique(sprintf("%sx %s", f2(imp$kd), imp$benchmark), sep = " #")
     print(tab2, right = TRUE, quote = FALSE)
   }
   cat("(R2dz.x, R2yz.dx: partial R2 of the omitted variable with the treatment given the\n",
-      "covariates, and with the outcome given treatment and covariates; |r| = square root,\n",
-      "i.e. the partial-correlation scale of the ITCV. Descriptive only: independent of the\n",
-      "variance estimator. No t-implied correlation or threshold is reported.)\n", sep = " ")
+      "covariates, and with the outcome given treatment and covariates. Impact: product of\n",
+      "its partial correlations with the outcome and with the treatment, both given the\n",
+      "covariates only, i.e. the scale of the ITCV; signed so that the omitted variable\n",
+      "biases the estimate away from zero. Descriptive only: independent of the variance\n",
+      "estimator, and not a threshold.)\n", sep = " ")
   invisible(NULL)
 }
 

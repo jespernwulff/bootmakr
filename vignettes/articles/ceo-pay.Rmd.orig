@@ -12,7 +12,10 @@ source(file.path(getOption("bootmakr.precompute.dir"), "helpers.R"))
 This article goes through a complete sensitivity analysis with `bootmakr`, from
 the first look at the standard errors to the check that the bootstrap can be
 trusted. It follows the four stages recommended by Lonati and Wulff (2026) and
-reproduces the empirical illustration of that paper.
+reproduces the empirical illustration of that paper. The reason a bootstrap
+is needed at all, that the ITCV and the analytic interval of `sensemakr`
+break down with robust standard errors, is shown in
+[Why bootstrap?](why-bootstrap.html).
 
 Every step is shown in R and in Stata. Pick a language on any tab and the rest
 of the page follows.
@@ -37,8 +40,9 @@ would have to be before the conclusion changes.
 ## Data and model
 
 The authors share their data in an
-[OSF repository](https://osf.io/bsv2e/?view_only=885d1ed5498c4b3c8a1194882e468286).
-The file can be read from there directly.
+[OSF repository](https://osf.io/bsv2e/?view_only=885d1ed5498c4b3c8a1194882e468286),
+through the view-only link given with their article. The file can be read
+from there directly; the data are theirs, and this site keeps no copy.
 
 `r tabs_r("setup")`
 
@@ -107,8 +111,9 @@ cluster-robust standard error (`r num(se[["clustered"]], 3)`) is almost twice
 the conventional one (`r num(se[["conventional"]], 3)`). With a gap of this
 size the impact threshold of a confounding variable (ITCV) can no longer be
 read as a product of correlations, because it is computed from a *t* statistic
-that now rests on a different variance estimator. This is the situation
-`bootmakr` is made for.
+that now rests on a different variance estimator, and the analytic interval
+of `sensemakr` is off by the same factor. This is the situation `bootmakr`
+is made for; see [Why bootstrap?](why-bootstrap.html).
 
 ## Stage 3: how strong is a plausible omitted variable?
 
@@ -200,11 +205,12 @@ status that the other covariates leave unexplained (a partial correlation of
 `r num(ob$r_dxj.x, 2, lead = FALSE)`), and `r num(100 * ob$r2yxj.dx, 1)`
 percent of the remaining variance of log CEO pay (a partial correlation of
 `r num(ob$r_yxj.dx, 2, lead = FALSE)`). The omitted variable assumed at
-`kd = 1` has partial correlations of about `r num(im$r_dz.x, 2, lead = FALSE)`
-and `r num(im$r_yz.dx, 2, lead = FALSE)` with the two variables. These are
-descriptive statistics of the data. No standard error enters them, so they do
-not depend on whether the model is estimated with conventional or clustered
-standard errors, and they are the same in every bootstrap run. The article
+`kd = 1` has an impact of `r num(im$impact, 2, lead = FALSE)`: the product of
+its partial correlations with CEO pay and with family-CEO status, on the
+scale on which the ITCV is stated. These are descriptive statistics of the
+data. No standard error enters them, so they do not depend on whether the
+model is estimated with conventional or clustered standard errors, and they
+are the same in every bootstrap run. The article
 [How strong is the benchmark?](benchmark-strength.html) explains the block in
 detail.
 
@@ -299,7 +305,9 @@ insignificant (*p* = `r num(at(ss, 2.5, "p"), 3, lead = FALSE)` in Stata and
 `r num(at(rs, 2.5, "pvalue"), 3, lead = FALSE)` in R at `kd = 2.5`). In terms
 of the benchmark-strength block, that is a variable with a partial
 R^2^ of about `r num(at(ims, 2.5, "r2dz.x"), 2, lead = FALSE)` with family-CEO
-status and `r num(at(ims, 2.5, "r2yz.dx"), 3, lead = FALSE)` with CEO pay.
+status and `r num(at(ims, 2.5, "r2yz.dx"), 3, lead = FALSE)` with CEO pay, an
+impact of `r num(at(ims, 2.5, "impact"), 2, lead = FALSE)` on the ITCV
+scale.
 
 ### A group of covariates as benchmark
 
@@ -482,7 +490,7 @@ plausible to the reader.
 The R results on this page were produced with R `r getRversion()`,
 `bootmakr` `r packageVersion("bootmakr")` and `sensemakr`
 `r packageVersion("sensemakr")`; the Stata results with StataNow 19.5,
-`bootmakr` 1.1.0 and the `sensemakr` command from SSC. With the seed shown,
+`bootmakr` 1.2.0 and the `sensemakr` command from SSC. With the seed shown,
 each program reproduces its own numbers exactly. On an ordinary laptop, 1,000
 replications of this model take about 20 seconds in R and 45 seconds in
 Stata, and 10,000 replications under 4 and 8 minutes.
@@ -497,6 +505,10 @@ Cinelli, C., & Hazlett, C. (2020). Making sense of sensitivity: Extending
 omitted variable bias. *Journal of the Royal Statistical Society: Series B*,
 82(1), 39--67. <https://doi.org/10.1111/rssb.12348>
 
-Lonati, S., & Wulff, J. N. (2026). *Why you should not use the ITCV with
-robust standard errors (and what to do instead)*. SSRN working paper.
-<https://ssrn.com/abstract=6789678>
+Cinelli, C., Ferwerda, J., & Hazlett, C. (2024). sensemakr: Sensitivity
+analysis tools for OLS in R and Stata. *Observational Studies*, 10(2),
+93--127. <https://doi.org/10.1353/obs.2024.a946583>
+
+Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
+robust standard errors (and what to do instead). *Academy of Management
+Proceedings*, 2026(1). <https://doi.org/10.5465/AMPROC.2026.247bp>

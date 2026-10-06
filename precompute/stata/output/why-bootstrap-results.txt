@@ -1,0 +1,3 @@
+label	kd	estimate	se	ci_lower	ci_upper	p	N	N_reps	N_successful
+bootmakr	.	 .2521337284	 .0742284676	 .0877736174	 .3766737282	        .004	        5000	        1000	        1000
+rows	.	 .2521337284	  .021583385	 .2078480497	  .293700695	           0	        5000	        1000	        1000

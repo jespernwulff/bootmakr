@@ -20,7 +20,7 @@ so that inference does not rest on the conventional OLS variance formula."><meta
     
     <a class="navbar-brand me-2" href="../index.html">bootmakr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,6 +41,7 @@ so that inference does not rest on the conventional OLS variance formula."><meta
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-guides">Guides</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-guides">
+    <a class="dropdown-item" href="../articles/why-bootstrap.html">Why bootstrap?</a>
     <a class="dropdown-item" href="../articles/benchmark-strength.html">How strong is the benchmark?</a>
     <a class="dropdown-item" href="../articles/clustering.html">Clustered and stratified data</a>
     <a class="dropdown-item" href="../articles/r-and-stata.html">R and Stata side by side</a>
@@ -49,7 +50,7 @@ so that inference does not rest on the conventional OLS variance formula."><meta
 <li class="active nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-reference">Reference</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-reference">
-    <a class="dropdown-item" href="../reference/index.html">R functions</a>
+    <a class="dropdown-item" href="../reference/index.html">R functions and data</a>
     <a class="dropdown-item" href="../articles/stata-help.html">Stata help file</a>
   </div>
 </li>
@@ -236,16 +237,20 @@ replications onwards.</p></dd>
 <p>An object of class <code>"bootmakr"</code>, a list with (among others)</p><dl><dt><code>results</code></dt>
 <dd><p>data frame with one row per <code>kd</code>: adjusted
 <code>estimate</code>, bootstrap <code>se</code>, <code>ci_lower</code>,
-<code>ci_upper</code>, <code>pvalue</code>, and the implied strength of the
+<code>ci_upper</code>, <code>pvalue</code>, the implied strength of the
 omitted variable (<code>r2dz.x</code>, <code>r2yz.dx</code>) the row is based
-on.</p></dd>
+on, and its <code>impact</code>.</p></dd>
 
 <dt><code>benchmark_strength</code></dt>
 <dd><p>list with <code>$observed</code> (partial
 R2 of the benchmark with treatment and outcome, and their square
-roots) and <code>$implied</code> (sensemakr's bound on the omitted
-variable at each <code>kd</code>/<code>ky</code>, and the corresponding
-absolute partial correlations).</p></dd>
+roots), <code>$implied</code> (sensemakr's bound on the omitted variable
+at each <code>kd</code>/<code>ky</code>: <code>r2dz.x</code>, <code>r2yz.dx</code>, their
+square roots <code>r_dz.x</code>, <code>r_yz.dx</code>, the partial correlation
+with the outcome given the covariates only, <code>r_yz.x</code>, and the
+<code>impact</code>, <code>r_yz.x * r_dz.x</code>) and <code>$r_yd.x</code> (the
+partial correlation of the outcome with the treatment given the
+covariates, used in that recursion).</p></dd>
 
 <dt><code>boot_samples</code></dt>
 <dd><p>matrix of bootstrap draws of the adjusted
@@ -285,10 +290,22 @@ confidence interval and p-value use a normal approximation.</p>
 <strong>benchmark strength</strong>: the partial R2 of the benchmark with the
 treatment (given the other covariates) and with the outcome (given the
 treatment and the covariates), and sensemakr's implied bound on the
-omitted variable at each <code>kd</code>, together with their square roots
-(absolute partial correlations). These are functions of the data alone.
-No standard error enters them, so they do not depend on the variance
-estimator. They are stored in <code>$benchmark_strength</code>.</p>
+omitted variable at each <code>kd</code>. For the omitted variable it also
+reports its <strong>impact</strong>, the product of its partial correlations with
+the outcome and with the treatment, both given the covariates only. This
+is the scale on which the impact threshold of a confounding variable
+(ITCV) is stated, so a reader used to the ITCV can judge how strong the
+assumed omitted variable is. The partial correlation with the outcome
+given the covariates is recovered from sensemakr's bound (which conditions
+on the treatment as well) with the recursion formula for partial
+correlations, with the signs set so that the omitted variable biases the
+estimate away from zero (towards zero when <code>reduce = FALSE</code>). All of
+these are functions of the data alone. No standard error enters them, so
+they do not depend on the variance estimator, and none of them is a
+threshold. They are stored in <code>$benchmark_strength</code>.</p>
+<p>The bootstrap procedure follows Cinelli, Ferwerda and Hazlett (2024,
+Appendix C); Lonati and Wulff (2026) show why it is needed when the
+regression calls for robust standard errors.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
@@ -302,72 +319,92 @@ Series B</em>, 82(1), 39-67.</p>
 analysis tools for OLS in R and Stata. <em>Observational Studies</em>,
 10(2), 93-127.</p>
 <p>Lonati, S., &amp; Wulff, J. N. (2026). Why you should not use the ITCV with
-robust standard errors (and what to do instead). SSRN working paper.
-<a href="https://ssrn.com/abstract=6789678" class="external-link">https://ssrn.com/abstract=6789678</a></p>
+robust standard errors (and what to do instead). <em>Academy of
+Management Proceedings</em>, 2026(1).
+<a href="https://doi.org/10.5465/AMPROC.2026.247bp" class="external-link">doi:10.5465/AMPROC.2026.247bp</a></p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="print.bootmakr.html">print.bootmakr</a></code>, <code><a href="plot.bootmakr.html">plot.bootmakr</a></code>,
-<code><a href="https://rdrr.io/pkg/sensemakr/man/sensemakr.html" class="external-link">sensemakr</a></code></p></div>
+<code><a href="firms.html">firms</a></code>, <code><a href="https://rdrr.io/pkg/sensemakr/man/sensemakr.html" class="external-link">sensemakr</a></code></p></div>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"darfur"</span>, package <span class="op">=</span> <span class="st">"sensemakr"</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># An omitted variable as strong as `female` (kd = 1, the default);</span></span></span>
-<span class="r-in"><span><span class="co"># villages are resampled as whole clusters. 100 replications keep the</span></span></span>
-<span class="r-in"><span><span class="co"># example quick; use 1,000 or more in practice.</span></span></span>
-<span class="r-in"><span><span class="va">out</span> <span class="op">&lt;-</span> <span class="fu">bootmakr</span><span class="op">(</span></span></span>
-<span class="r-in"><span>  <span class="va">peacefactor</span> <span class="op">~</span> <span class="va">directlyharmed</span> <span class="op">+</span> <span class="va">age</span> <span class="op">+</span> <span class="va">farmer_dar</span> <span class="op">+</span> <span class="va">herder_dar</span> <span class="op">+</span></span></span>
-<span class="r-in"><span>    <span class="va">pastvoted</span> <span class="op">+</span> <span class="va">hhsize_darfur</span> <span class="op">+</span> <span class="va">female</span> <span class="op">+</span> <span class="va">village</span>,</span></span>
-<span class="r-in"><span>  data <span class="op">=</span> <span class="va">darfur</span>, treat <span class="op">=</span> <span class="st">"directlyharmed"</span>,</span></span>
-<span class="r-in"><span>  benchmark_covariates <span class="op">=</span> <span class="st">"female"</span>,</span></span>
-<span class="r-in"><span>  cluster <span class="op">=</span> <span class="st">"village"</span>, reps <span class="op">=</span> <span class="fl">100</span>, seed <span class="op">=</span> <span class="fl">1</span>, progress <span class="op">=</span> <span class="cn">FALSE</span></span></span>
-<span class="r-in"><span><span class="op">)</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Simulated firm panel: the true effect of x on y is 0.25, and a firm-level</span></span></span>
+<span class="r-in"><span><span class="co"># variable q, omitted here, biases the regression of y on x and c (see</span></span></span>
+<span class="r-in"><span><span class="co"># ?firms). An omitted variable as strong as the observed control c (kd = 1,</span></span></span>
+<span class="r-in"><span><span class="co"># the default); firms are resampled as whole clusters. 200 replications</span></span></span>
+<span class="r-in"><span><span class="co"># keep the example quick; use 1,000 or more in practice.</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"firms"</span>, package <span class="op">=</span> <span class="st">"bootmakr"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">out</span> <span class="op">&lt;-</span> <span class="fu">bootmakr</span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="va">c</span>, data <span class="op">=</span> <span class="va">firms</span>, treat <span class="op">=</span> <span class="st">"x"</span>,</span></span>
+<span class="r-in"><span>                benchmark_covariates <span class="op">=</span> <span class="st">"c"</span>, cluster <span class="op">=</span> <span class="st">"firm"</span>,</span></span>
+<span class="r-in"><span>                reps <span class="op">=</span> <span class="fl">200</span>, seed <span class="op">=</span> <span class="fl">1</span>, progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">out</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Call:</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> bootmakr(formula = peacefactor ~ directlyharmed + age + farmer_dar + </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>     herder_dar + pastvoted + hhsize_darfur + female + village, </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>     data = darfur, treat = "directlyharmed", benchmark_covariates = "female", </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>     reps = 100, seed = 1, cluster = "village", progress = FALSE)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> bootmakr(formula = y ~ x + c, data = firms, treat = "x", benchmark_covariates = "c", </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     reps = 200, seed = 1, cluster = "firm", progress = FALSE)</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Bootstrap sensitivity analysis (100 reps, n = 1,276, 486 clusters)</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Benchmark: female | kd = 1, ky = 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Bootstrap sensitivity analysis (200 reps, n = 5,000, 250 clusters)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Benchmark: c | kd = 1, ky = 1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Adjusted estimates (percentile 95% CI):</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>                Estimate Std. Err     2.5%    97.5% Pr(&gt;|0|)  </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> directlyharmed 0.075220 0.024409 0.030762 0.114113     0.02 *</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   Estimate Std. Err     2.5%    97.5% Pr(&gt;|0|)    </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> x 0.252134 0.073892 0.114400 0.388515        0 ***</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> ---</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> (H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Benchmark strength (descriptive: computed from the data, no standard errors involved)</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>                            Partial R2 |Partial r|</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> female with treatment | X      0.0091       0.095</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> female with outcome | D, X     0.1090       0.330</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                       Partial R2 |Partial r|</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> c with treatment | X      0.1433       0.379</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> c with outcome | D, X     0.1248       0.353</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Implied strength of the omitted variable (sensemakr bounds):</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>                kd   ky R2dz.x R2yz.dx |r_dz.x| |r_yz.dx|</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1.00x female 1.00 1.00 0.0092  0.1246    0.096     0.353</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>           kd   ky R2dz.x R2yz.dx Impact</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1.00x c 1.00 1.00 0.1673  0.1998  0.222</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> (R2dz.x, R2yz.dx: partial R2 of the omitted variable with the treatment given the</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  covariates, and with the outcome given treatment and covariates; |r| = square root,</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  i.e. the partial-correlation scale of the ITCV. Descriptive only: independent of the</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  variance estimator. No t-implied correlation or threshold is reported.)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  covariates, and with the outcome given treatment and covariates. Impact: product of</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  its partial correlations with the outcome and with the treatment, both given the</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  covariates only, i.e. the scale of the ITCV; signed so that the omitted variable</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  biases the estimate away from zero. Descriptive only: independent of the variance</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  estimator, and not a threshold.)</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Benchmark strength on the partial-R2 and partial-correlation scales</span></span></span>
+<span class="r-in"><span><span class="co"># The strength of the benchmark and of the omitted variable it implies,</span></span></span>
+<span class="r-in"><span><span class="co"># with the impact of the latter on the scale of the ITCV</span></span></span>
 <span class="r-in"><span><span class="va">out</span><span class="op">$</span><span class="va">benchmark_strength</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $type</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "single"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $observed</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   benchmark     r2dxj.x  r2yxj.dx    r_dxj.x  r_yxj.dx</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1    female 0.009081065 0.1090339 0.09529462 0.3302028</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   benchmark   r2dxj.x  r2yxj.dx   r_dxj.x  r_yxj.dx</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1         c 0.1433067 0.1247742 0.3785587 0.3532339</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $implied</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   benchmark kd ky      r2dz.x   r2yz.dx     r_dz.x   r_yz.dx</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1    female  1  1 0.009164287 0.1246409 0.09573028 0.3530452</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   benchmark kd ky    r2dz.x   r2yz.dx    r_dz.x   r_yz.dx    r_yz.x    impact</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1         c  1  1 0.1672789 0.1998387 0.4089974 0.4470332 0.5420107 0.2216809</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $r_yd.x</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.4201003</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Several strengths at once: where does the effect stop being significant?</span></span></span>
+<span class="r-in"><span><span class="va">sweep</span> <span class="op">&lt;-</span> <span class="fu">bootmakr</span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="va">c</span>, data <span class="op">=</span> <span class="va">firms</span>, treat <span class="op">=</span> <span class="st">"x"</span>,</span></span>
+<span class="r-in"><span>                  benchmark_covariates <span class="op">=</span> <span class="st">"c"</span>, kd <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">1</span>, <span class="fl">1.5</span>, <span class="fl">2</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>                  cluster <span class="op">=</span> <span class="st">"firm"</span>, reps <span class="op">=</span> <span class="fl">200</span>, seed <span class="op">=</span> <span class="fl">1</span>, progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">sweep</span><span class="op">$</span><span class="va">results</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    kd      estimate         se    ci_lower  ci_upper pvalue     r2dz.x</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 0.5  0.3540423072 0.04998579  0.26661604 0.4517006   0.00 0.08363943</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 1.0  0.2521337284 0.07389179  0.11439960 0.3885147   0.00 0.16727885</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3 1.5  0.1354581053 0.11148630 -0.09457619 0.3211839   0.23 0.25091828</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 2.0 -0.0009089434 0.17156882 -0.39944833 0.2548340   0.91 0.33455771</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      r2yz.dx    impact</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 0.09728672 0.1134982</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 0.19983870 0.2216809</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3 0.30927622 0.3242071</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 0.42800396 0.4206720</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">sweep</span>, type <span class="op">=</span> <span class="st">"kd_sweep"</span><span class="op">)</span></span></span>
+<span class="r-plt img"><img src="bootmakr-1.png" alt="" width="700" height="433"></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

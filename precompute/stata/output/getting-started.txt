@@ -1,0 +1,274 @@
+
+. 
+end of do-file
+
+. quietly cd "$pc_out/.."
+
+. 
+. * >>> data
+. use firms, clear
+(bootmakr example data: variant of Lonati & Wulff (2026), Table 1)
+
+. describe
+
+Contains data from firms.dta
+ Observations:         5,000                  bootmakr example data: variant of Lonati & Wulff (2026), Table 1
+    Variables:             6                  06 Oct 2026 13:09
+------------------------------------------------------------------------------------------------------------------------
+Variable      Storage   Display    Value
+    name         type    format    label      Variable label
+------------------------------------------------------------------------------------------------------------------------
+firm            long    %12.0g                Firm identifier (cluster)
+year            long    %12.0g                Year within firm, 1 to 20
+y               double  %10.0g                Outcome
+x               double  %10.0g                Predictor of interest; true effect on y is 0.25
+c               double  %10.0g                Observed firm-level control
+q               double  %10.0g                Unobserved firm-level variable (omitted in the analysis)
+------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+
+. * <<<
+. 
+. * >>> naive
+. regress y x c, vce(cluster firm)
+
+Linear regression                               Number of obs     =      5,000
+                                                F(2, 249)         =     191.47
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.3635
+                                                Root MSE          =        1.1
+
+                                 (Std. err. adjusted for 250 clusters in firm)
+------------------------------------------------------------------------------
+             |               Robust
+           y | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+           x |   .4445283   .0405336    10.97   0.000      .364696    .5243607
+           c |   .4755564   .0577003     8.24   0.000     .3619135    .5891993
+       _cons |    .030529   .0539153     0.57   0.572    -.0756591    .1367171
+------------------------------------------------------------------------------
+
+. * <<<
+. 
+. tic
+
+. * >>> first
+. bootmakr y x c, treat(x) benchmark(c) cluster(firm) seed(123)
+
+Bootstrap results                               Number of obs     =     5,000
+                                                Replications      =     1,000
+
+                 (Replications based on 250 clusters in firm)
+------------------------------------------------------------------------------
+             |      Observed    Bootstrap                    Percentile
+             |       Coef.      Std. Err.    P-value    [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+x            |    .2521337      .0742285      0.0040     .0877736    .3766737
+------------------------------------------------------------------------------
+Note: CI is percentile bootstrap confidence interval
+      P-value is bootstrap p-value (H0: x = 0)
+      Benchmark: c, kd = 1, ky = 1
+
+Benchmark strength (descriptive; no standard errors involved)
+------------------------------------------------------------------------------
+Benchmark: c
+                                                 Partial R2    |Partial corr.|
+  with x | X                                         0.1433             0.379
+  with y | x, X                                      0.1248             0.353
+------------------------------------------------------------------------------
+Implied strength of the omitted variable (sensemakr bounds):
+     kd      ky      R2dz.x     R2yz.dx     Impact
+   1.00    1.00       0.1673     0.1998      0.222
+------------------------------------------------------------------------------
+Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
+      treatment given the covariates (with the outcome given treatment
+      and covariates). Impact = product of its partial correlations with
+      the outcome and with the treatment, both given the covariates only:
+      the scale of the ITCV; signed so that the omitted variable biases
+      the estimate away from zero. Descriptive only: independent of the
+      variance estimator, and not a threshold.
+
+. * <<<
+. keep_result first
+
+. 
+. * >>> stored
+. return list
+
+scalars:
+             r(r_yd_x) =  .4201003465134852
+             r(impact) =  .2216809386813333
+            r(r2yz_dx) =  .1998386969880782
+             r(r2dz_x) =  .1672788528775167
+           r(r2yxj_dx) =  .1247741705206282
+            r(r2dxj_x) =  .1433066764339555
+                  r(p) =  .004
+           r(ci_upper) =  .3766737282276154
+           r(ci_lower) =  .0877736173570156
+                 r(se) =  .0742284676435436
+           r(estimate) =  .2521337283967872
+            r(N_clust) =  250
+       r(N_successful) =  1000
+             r(N_reps) =  1000
+                  r(N) =  5000
+
+matrices:
+      r(ci_percentile) :  2 x 1
+  r(benchmark_strengt
+    h)                 :  1 x 8
+
+. * <<<
+. toc first
+
+. 
+. tic
+
+. * >>> sweep
+. bootmakr y x c, treat(x) benchmark(c) kd(0.5 0.75 1 1.25 1.5) ///
+>     cluster(firm) seed(123) plot
+
+Bootstrap results                               Number of obs     =     5,000
+                                                Replications      =     1,000
+
+                 (Replications based on 250 clusters in firm)
+------------------------------------------------------------------------------
+             |      Observed    Bootstrap                    Percentile
+             |       Coef.      Std. Err.    P-value    [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+x_.5         |    .3540423      .0518952      0.0000       .25325    .4484074
+x_.75        |    .3046965      .0614491      0.0000     .1763916    .4110296
+x_1          |    .2521337      .0742285      0.0040     .0877736    .3766737
+x_1.25       |     .195903      .0907298      0.0700     -.013256    .3365256
+x_1.5        |    .1354581       .111817      0.2760    -.1330485    .3039364
+------------------------------------------------------------------------------
+Note: CI is percentile bootstrap confidence interval
+      P-value is bootstrap p-value (H0: x = 0)
+      Benchmark: c, kd = .5 .75 1 1.25 1.5, ky = .5 .75 1 1.25 1.5
+
+Benchmark strength (descriptive; no standard errors involved)
+------------------------------------------------------------------------------
+Benchmark: c
+                                                 Partial R2    |Partial corr.|
+  with x | X                                         0.1433             0.379
+  with y | x, X                                      0.1248             0.353
+------------------------------------------------------------------------------
+Implied strength of the omitted variable (sensemakr bounds):
+     kd      ky      R2dz.x     R2yz.dx     Impact
+   0.50    0.50       0.0836     0.0973      0.113
+   0.75    0.75       0.1255     0.1478      0.168
+   1.00    1.00       0.1673     0.1998      0.222
+   1.25    1.25       0.2091     0.2536      0.274
+   1.50    1.50       0.2509     0.3093      0.324
+------------------------------------------------------------------------------
+Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
+      treatment given the covariates (with the outcome given treatment
+      and covariates). Impact = product of its partial correlations with
+      the outcome and with the treatment, both given the covariates only:
+      the scale of the ITCV; signed so that the omitted variable biases
+      the estimate away from zero. Descriptive only: independent of the
+      variance estimator, and not a threshold.
+
+. * <<<
+. keep_sweep sweep 0.5 0.75 1 1.25 1.5
+
+. 
+. * >>> sweep-stored
+. matrix list r(results)
+
+r(results)[5,6]
+      estimate          se    ci_lower    ci_upper      pvalue        N_ok
+r1   .35404231   .05189517   .25325005   .44840744           0        1000
+r2   .30469646   .06144914   .17639161   .41102959           0        1000
+r3   .25213373   .07422847   .08777362   .37667373        .004        1000
+r4   .19590303   .09072977  -.01325604   .33652565         .07        1000
+r5   .13545811   .11181698  -.13304852   .30393642        .276        1000
+
+. matrix list r(benchmark_strength)
+
+r(benchmark_strength)[5,8]
+           kd         ky     r2dz_x    r2yz_dx     r_dz_x    r_yz_dx     r_yz_x     impact
+r1         .5         .5  .08363943  .09728672  .28920482  .31190819  .39244926  .11349822
+r2        .75        .75  .12545914  .14781734  .35420212  .38447021   .4750791  .16827402
+r3          1          1  .16727885   .1998387  .40899738  .44703322  .54201066  .22168094
+r4       1.25       1.25  .20909857  .25356964  .45727297  .50355699  .59849309  .27367471
+r5        1.5        1.5  .25091828  .30927622  .50091744  .55612608  .64722672  .32420715
+
+. * <<<
+. toc sweep
+
+. quietly graph export "$pc_out/getting-started-sweep.svg", replace
+
+. 
+. * >>> check
+. regress y x c q, vce(cluster firm)
+
+Linear regression                               Number of obs     =      5,000
+                                                F(3, 249)         =     199.21
+                                                Prob > F          =     0.0000
+                                                R-squared         =     0.4785
+                                                Root MSE          =     .99577
+
+                                 (Std. err. adjusted for 250 clusters in firm)
+------------------------------------------------------------------------------
+             |               Robust
+           y | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+           x |   .2286068    .036788     6.21   0.000     .1561516    .3010621
+           c |    .578841   .0492042    11.76   0.000     .4819316    .6757504
+           q |   .5125708   .0486366    10.54   0.000     .4167793    .6083623
+       _cons |   .0400548   .0455783     0.88   0.380    -.0497133    .1298229
+------------------------------------------------------------------------------
+
+. * <<<
+. 
+. tic
+
+. * >>> program
+. capture program drop my_sens
+
+. program define my_sens, eclass
+  1.     sensemakr y x c, treat(x) benchmark(c) kd(1) suppress
+  2. end
+
+. 
+. bootmakr, treat(x) program(my_sens) cluster(firm) seed(123)
+
+Bootstrap results                               Number of obs     =     5,000
+                                                Replications      =     1,000
+
+                 (Replications based on 250 clusters in firm)
+                 (Using user-supplied program: my_sens)
+------------------------------------------------------------------------------
+             |      Observed    Bootstrap                    Percentile
+             |       Coef.      Std. Err.    P-value    [95% Conf. Interval]
+-------------+----------------------------------------------------------------
+x            |    .2521337      .0742285      0.0040     .0877736    .3766737
+------------------------------------------------------------------------------
+Note: CI is percentile bootstrap confidence interval
+      P-value is bootstrap p-value (H0: x = 0)
+
+Benchmark strength (descriptive; no standard errors involved)
+------------------------------------------------------------------------------
+Implied strength of the omitted variable (sensemakr bounds):
+     kd      ky      R2dz.x     R2yz.dx     Impact
+   1.00    1.00       0.1673     0.1998      0.222
+------------------------------------------------------------------------------
+Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
+      treatment given the covariates (with the outcome given treatment
+      and covariates). Impact = product of its partial correlations with
+      the outcome and with the treatment, both given the covariates only:
+      the scale of the ITCV; signed so that the omitted variable biases
+      the estimate away from zero. Descriptive only: independent of the
+      variance estimator, and not a threshold.
+
+. * <<<
+. keep_result program
+
+. toc program
+
+. 
+. file close res
+
+. file close tim
+
+. log close pc

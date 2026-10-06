@@ -39,6 +39,7 @@ options of the command request the plot and the diagnostics.
 
 | Purpose | R | Stata |
 |---|---|---|
+| The example data | `data("firms")` | `net get bootmakr, from(...)`, then `use firms` |
 | Model | `formula = y ~ d + x1 + x2`, `data = dat` | `y d x1 x2` (outcome first) |
 | Treatment | `treat = "d"` | `treat(d)` |
 | Benchmark covariate | `benchmark_covariates = "x1"` | `benchmark(x1)` |
@@ -70,8 +71,9 @@ options of the command request the plot and the diagnostics.
 
 | Purpose | R | Stata |
 |---|---|---|
-| Table of adjusted estimates | `print(out)`, `out$results` | printed; `r(estimate)`, `r(se)`, `r(ci_lower)`, `r(ci_upper)`, `r(p)`; `r(results)` with several `kd()` |
+| Table of adjusted estimates | `print(out)`, `out$results` | printed; `r(estimate)`, `r(se)`, `r(ci_lower)`, `r(ci_upper)`, `r(p)`; `r(results)` with several `kd()` (its last column, `N_ok`, counts the successful replications behind each row) |
 | Benchmark strength | printed; `out$benchmark_strength` | printed; `r(r2dxj_x)`, `r(r2yxj_dx)`, `r(r2dz_x)`, `r(r2yz_dx)`, `r(benchmark_strength)` |
+| Impact of the omitted variable (ITCV scale) | in the block; `out$results$impact`, `out$benchmark_strength$implied$impact`, `$r_yd.x` | in the block; `r(impact)`, `r(r_yd_x)`, columns `r_yz_x` and `impact` of `r(benchmark_strength)` |
 | Bootstrap draws | `out$boot_samples` | `saving(filename)` |
 | Replications completed and failed | `out$N_successful`, `out$N_fail`; note below the table | `r(N_successful)`; warning below the table |
 | Plot of the kd sweep | `plot(out, type = "kd_sweep")` | `plot` option |
@@ -98,7 +100,9 @@ your own that calls `sensemakr`. See
 **Five Stata options depend on `sensemakr`.** `kr()`, `r2dxj_x()`,
 `r2yxj_dx()`, `bound_label()` and `reduce` are handed to `sensemakr`
 unchanged. The version on SSC at the time of writing does not accept them,
-so they stop with an error. The help file says so.
+so they stop with an error. The help file says so. In particular, a
+strength of the omitted variable given by hand (`r2dz.x`, `r2yz.dx` in R)
+has no working Stata counterpart.
 
 **Row labels differ.** With several values of `kd`, R labels the rows
 `d (kd=0.5)` and Stata `d_.5`.

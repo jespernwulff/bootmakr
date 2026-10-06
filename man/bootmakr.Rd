@@ -106,14 +106,18 @@ An object of class \code{"bootmakr"}, a list with (among others)
 \describe{
 \item{\code{results}}{data frame with one row per \code{kd}: adjusted
 \code{estimate}, bootstrap \code{se}, \code{ci_lower},
-\code{ci_upper}, \code{pvalue}, and the implied strength of the
+\code{ci_upper}, \code{pvalue}, the implied strength of the
 omitted variable (\code{r2dz.x}, \code{r2yz.dx}) the row is based
-on.}
+on, and its \code{impact}.}
 \item{\code{benchmark_strength}}{list with \code{$observed} (partial
 R2 of the benchmark with treatment and outcome, and their square
-roots) and \code{$implied} (sensemakr's bound on the omitted
-variable at each \code{kd}/\code{ky}, and the corresponding
-absolute partial correlations).}
+roots), \code{$implied} (sensemakr's bound on the omitted variable
+at each \code{kd}/\code{ky}: \code{r2dz.x}, \code{r2yz.dx}, their
+square roots \code{r_dz.x}, \code{r_yz.dx}, the partial correlation
+with the outcome given the covariates only, \code{r_yz.x}, and the
+\code{impact}, \code{r_yz.x * r_dz.x}) and \code{$r_yd.x} (the
+partial correlation of the outcome with the treatment given the
+covariates, used in that recursion).}
 \item{\code{boot_samples}}{matrix of bootstrap draws of the adjusted
 estimate, one column per \code{kd} (a list of three such matrices
 with two-way clustering).}
@@ -153,28 +157,46 @@ Below the table of adjusted estimates, the print method reports the
 \strong{benchmark strength}: the partial R2 of the benchmark with the
 treatment (given the other covariates) and with the outcome (given the
 treatment and the covariates), and sensemakr's implied bound on the
-omitted variable at each \code{kd}, together with their square roots
-(absolute partial correlations). These are functions of the data alone.
-No standard error enters them, so they do not depend on the variance
-estimator. They are stored in \code{$benchmark_strength}.
+omitted variable at each \code{kd}. For the omitted variable it also
+reports its \strong{impact}, the product of its partial correlations with
+the outcome and with the treatment, both given the covariates only. This
+is the scale on which the impact threshold of a confounding variable
+(ITCV) is stated, so a reader used to the ITCV can judge how strong the
+assumed omitted variable is. The partial correlation with the outcome
+given the covariates is recovered from sensemakr's bound (which conditions
+on the treatment as well) with the recursion formula for partial
+correlations, with the signs set so that the omitted variable biases the
+estimate away from zero (towards zero when \code{reduce = FALSE}). All of
+these are functions of the data alone. No standard error enters them, so
+they do not depend on the variance estimator, and none of them is a
+threshold. They are stored in \code{$benchmark_strength}.
+
+The bootstrap procedure follows Cinelli, Ferwerda and Hazlett (2024,
+Appendix C); Lonati and Wulff (2026) show why it is needed when the
+regression calls for robust standard errors.
 }
 \examples{
-data("darfur", package = "sensemakr")
-
-# An omitted variable as strong as `female` (kd = 1, the default);
-# villages are resampled as whole clusters. 100 replications keep the
-# example quick; use 1,000 or more in practice.
-out <- bootmakr(
-  peacefactor ~ directlyharmed + age + farmer_dar + herder_dar +
-    pastvoted + hhsize_darfur + female + village,
-  data = darfur, treat = "directlyharmed",
-  benchmark_covariates = "female",
-  cluster = "village", reps = 100, seed = 1, progress = FALSE
-)
+# Simulated firm panel: the true effect of x on y is 0.25, and a firm-level
+# variable q, omitted here, biases the regression of y on x and c (see
+# ?firms). An omitted variable as strong as the observed control c (kd = 1,
+# the default); firms are resampled as whole clusters. 200 replications
+# keep the example quick; use 1,000 or more in practice.
+data("firms", package = "bootmakr")
+out <- bootmakr(y ~ x + c, data = firms, treat = "x",
+                benchmark_covariates = "c", cluster = "firm",
+                reps = 200, seed = 1, progress = FALSE)
 out
 
-# Benchmark strength on the partial-R2 and partial-correlation scales
+# The strength of the benchmark and of the omitted variable it implies,
+# with the impact of the latter on the scale of the ITCV
 out$benchmark_strength
+
+# Several strengths at once: where does the effect stop being significant?
+sweep <- bootmakr(y ~ x + c, data = firms, treat = "x",
+                  benchmark_covariates = "c", kd = c(0.5, 1, 1.5, 2),
+                  cluster = "firm", reps = 200, seed = 1, progress = FALSE)
+sweep$results
+plot(sweep, type = "kd_sweep")
 
 }
 \references{
@@ -191,10 +213,11 @@ analysis tools for OLS in R and Stata. \emph{Observational Studies},
 10(2), 93-127.
 
 Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
-robust standard errors (and what to do instead). SSRN working paper.
-\url{https://ssrn.com/abstract=6789678}
+robust standard errors (and what to do instead). \emph{Academy of
+Management Proceedings}, 2026(1).
+\doi{10.5465/AMPROC.2026.247bp}
 }
 \seealso{
 \code{\link{print.bootmakr}}, \code{\link{plot.bootmakr}},
-\code{\link[sensemakr]{sensemakr}}
+\code{\link{firms}}, \code{\link[sensemakr]{sensemakr}}
 }

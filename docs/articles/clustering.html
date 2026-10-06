@@ -36,7 +36,7 @@
     
     <a class="navbar-brand me-2" href="../index.html">bootmakr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,6 +58,7 @@
 <li class="active nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-guides">Guides</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-guides">
+    <a class="dropdown-item" href="../articles/why-bootstrap.html">Why bootstrap?</a>
     <a class="dropdown-item" href="../articles/benchmark-strength.html">How strong is the benchmark?</a>
     <a class="dropdown-item" href="../articles/clustering.html">Clustered and stratified data</a>
     <a class="dropdown-item" href="../articles/r-and-stata.html">R and Stata side by side</a>
@@ -66,7 +67,7 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-reference">Reference</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-reference">
-    <a class="dropdown-item" href="../reference/index.html">R functions</a>
+    <a class="dropdown-item" href="../reference/index.html">R functions and data</a>
     <a class="dropdown-item" href="../articles/stata-help.html">Stata help file</a>
   </div>
 </li>
@@ -112,11 +113,14 @@
     
 <!-- Generated from clustering.Rmd.orig by precompute/precompile.R. Edit the .orig file, not this one. -->
 <p><code>bootmakr</code> obtains its standard errors, confidence
-intervals and <em>p</em>-values by resampling the data. What it
-resamples is your decision, and it should follow one rule:
-<strong>resample the units that you would treat as independent when
-choosing standard errors for the regression itself.</strong> If you
-would cluster the standard errors by firm, resample firms.</p>
+intervals and <em>p</em>-values by resampling the data, because the
+analytic alternatives, the ITCV and the confidence interval of
+<code>sensemakr</code>, rest on the conventional OLS variance and break
+down when the regression calls for robust standard errors (see <a href="why-bootstrap.html">Why bootstrap?</a>). What it resamples is your
+decision, and it should follow one rule: <strong>resample the units that
+you would treat as independent when choosing standard errors for the
+regression itself.</strong> If you would cluster the standard errors by
+firm, resample firms.</p>
 <table class="table">
 <colgroup>
 <col width="25%">
@@ -307,12 +311,14 @@ component.</p>
 <span><span class="co">#&gt; x with treatment | X      0.1355       0.368</span></span>
 <span><span class="co">#&gt; x with outcome | D, X     0.0625       0.250</span></span>
 <span><span class="co">#&gt; Implied strength of the omitted variable (sensemakr bounds):</span></span>
-<span><span class="co">#&gt;           kd   ky R2dz.x R2yz.dx |r_dz.x| |r_yz.dx|</span></span>
-<span><span class="co">#&gt; 1.00x x 1.00 1.00 0.1567  0.0915    0.396     0.303</span></span>
+<span><span class="co">#&gt;           kd   ky R2dz.x R2yz.dx Impact</span></span>
+<span><span class="co">#&gt; 1.00x x 1.00 1.00 0.1567  0.0915  0.160</span></span>
 <span><span class="co">#&gt; (R2dz.x, R2yz.dx: partial R2 of the omitted variable with the treatment given the</span></span>
-<span><span class="co">#&gt;  covariates, and with the outcome given treatment and covariates; |r| = square root,</span></span>
-<span><span class="co">#&gt;  i.e. the partial-correlation scale of the ITCV. Descriptive only: independent of the</span></span>
-<span><span class="co">#&gt;  variance estimator. No t-implied correlation or threshold is reported.)</span></span></code></pre></div>
+<span><span class="co">#&gt;  covariates, and with the outcome given treatment and covariates. Impact: product of</span></span>
+<span><span class="co">#&gt;  its partial correlations with the outcome and with the treatment, both given the</span></span>
+<span><span class="co">#&gt;  covariates only, i.e. the scale of the ITCV; signed so that the omitted variable</span></span>
+<span><span class="co">#&gt;  biases the estimate away from zero. Descriptive only: independent of the variance</span></span>
+<span><span class="co">#&gt;  estimator, and not a threshold.)</span></span></code></pre></div>
 <p>Clustering by firm alone gives a standard error of 0.070. Allowing
 for the year dimension as well raises it to 0.080.</p>
 <p>A few things differ from the one-way case.</p>
@@ -383,9 +389,9 @@ cluster-robust inference. <em>Journal of Human Resources</em>, 50(2),
 <p>Chen, G., Chittoor, R., &amp; Vissa, B. (2021). Does nepotism run in
 the family? CEO pay and pay-performance sensitivity in Indian family
 firms. <em>Strategic Management Journal</em>, 42(7), 1326–1343. <a href="https://doi.org/10.1002/smj.3263" class="external-link uri">https://doi.org/10.1002/smj.3263</a></p>
-<p>Lonati, S., &amp; Wulff, J. N. (2026). <em>Why you should not use the
-ITCV with robust standard errors (and what to do instead)</em>. SSRN
-working paper. <a href="https://ssrn.com/abstract=6789678" class="external-link uri">https://ssrn.com/abstract=6789678</a></p>
+<p>Lonati, S., &amp; Wulff, J. N. (2026). Why you should not use the
+ITCV with robust standard errors (and what to do instead). <em>Academy
+of Management Proceedings</em>, 2026(1). <a href="https://doi.org/10.5465/AMPROC.2026.247bp" class="external-link uri">https://doi.org/10.5465/AMPROC.2026.247bp</a></p>
 </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
     </nav></aside>

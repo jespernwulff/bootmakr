@@ -69,14 +69,16 @@ Benchmark: ceo_tenure
   with lg_ceopay | owner_ceo, X                      0.0034             0.059
 ------------------------------------------------------------------------------
 Implied strength of the omitted variable (sensemakr bounds):
-     kd      ky      R2dz.x     R2yz.dx    |r_dz.x|   |r_yz.dx|
-   1.00    1.00       0.1691     0.0048      0.411      0.070
+     kd      ky      R2dz.x     R2yz.dx     Impact
+   1.00    1.00       0.1691     0.0048      0.049
 ------------------------------------------------------------------------------
 Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
       treatment given the covariates (with the outcome given treatment
-      and covariates). |r| = square root, i.e. the partial-correlation
-      scale of the ITCV. Descriptive only: no t-implied correlation or
-      threshold is reported.
+      and covariates). Impact = product of its partial correlations with
+      the outcome and with the treatment, both given the covariates only:
+      the scale of the ITCV; signed so that the omitted variable biases
+      the estimate away from zero. Descriptive only: independent of the
+      variance estimator, and not a threshold.
 
 . * <<<
 . keep_result kd1
@@ -86,6 +88,8 @@ Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
 . return list
 
 scalars:
+             r(r_yd_x) =  .1394958555830244
+             r(impact) =  .0494055289128344
             r(r2yz_dx) =  .004836675927156
              r(r2dz_x) =  .1691147007051809
            r(r2yxj_dx) =  .0034256315985701
@@ -103,7 +107,7 @@ scalars:
 matrices:
       r(ci_percentile) :  2 x 1
   r(benchmark_strengt
-    h)                 :  1 x 6
+    h)                 :  1 x 8
 
 . * <<<
 . toc kd1
@@ -138,14 +142,16 @@ Benchmark: ceo_tenure
   with lg_ceopay | owner_ceo, X                      0.0034             0.059
 ------------------------------------------------------------------------------
 Implied strength of the omitted variable (sensemakr bounds):
-     kd      ky      R2dz.x     R2yz.dx    |r_dz.x|   |r_yz.dx|
-   0.50    0.50       0.0846     0.0024      0.291      0.049
+     kd      ky      R2dz.x     R2yz.dx     Impact
+   0.50    0.50       0.0846     0.0024      0.025
 ------------------------------------------------------------------------------
 Note: R2dz.x (R2yz.dx) = partial R2 of the omitted variable with the
       treatment given the covariates (with the outcome given treatment
-      and covariates). |r| = square root, i.e. the partial-correlation
-      scale of the ITCV. Descriptive only: no t-implied correlation or
-      threshold is reported.
+      and covariates). Impact = product of its partial correlations with
+      the outcome and with the treatment, both given the covariates only:
+      the scale of the ITCV; signed so that the omitted variable biases
+      the estimate away from zero. Descriptive only: independent of the
+      variance estimator, and not a threshold.
 
 . * <<<
 . keep_result kd05

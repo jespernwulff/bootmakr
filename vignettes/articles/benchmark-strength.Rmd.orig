@@ -2,8 +2,9 @@
 title: "How strong is the benchmark?"
 description: >
   What "an omitted variable as strong as the benchmark" means, in partial
-  R-squared values and partial correlations, and where the numbers in the
-  benchmark-strength block come from.
+  R-squared values and on the scale of the ITCV, where the numbers in the
+  benchmark-strength block come from, and what happens when the assumed
+  strength is impossible.
 ---
 
 ```{r helpers, include = FALSE}
@@ -15,7 +16,9 @@ strong as" an observed covariate been omitted. That phrase needs a
 definition, and readers who are used to the impact threshold of a confounding
 variable (ITCV) expect one in terms of correlations. The block that
 `bootmakr` prints below its results gives it. This article explains what the
-block contains, how to reproduce it, and what it should not be used for.
+block contains, how to reproduce it, and what it should not be used for. (Why
+the ITCV itself cannot serve as the definition when the regression uses
+robust standard errors is explained in [Why bootstrap?](why-bootstrap.html).)
 
 ## Two relationships, two numbers
 
@@ -37,7 +40,8 @@ omitted variable is then assumed to be a multiple of it.
 
 We use the data of the [worked example](ceo-pay.html): the effect of a
 family CEO (`owner_ceo`) on the logarithm of CEO pay, with CEO tenure as the
-benchmark and two multiples of it.
+benchmark and two multiples of it. The data come from the authors' OSF
+repository.
 
 ```{r block}
 library(bootmakr)
@@ -60,6 +64,7 @@ out$benchmark_strength
 ```{r numbers, include = FALSE}
 ob <- out$benchmark_strength$observed
 im <- out$benchmark_strength$implied
+r.yd <- out$benchmark_strength$r_yd.x
 ```
 
 (The block does not depend on the bootstrap, so a small number of
@@ -77,10 +82,57 @@ other controls are held fixed.
 
 `$implied` describes the omitted variable that each row of the results table
 assumes: its partial R^2^ with the treatment (`r2dz.x`) and with the outcome
-(`r2yz.dx`), and the corresponding partial correlations.
+(`r2yz.dx`), the corresponding partial correlations (`r_dz.x`, `r_yz.dx`),
+its partial correlation with the outcome given the covariates *only*
+(`r_yz.x`), and the product of that correlation with `r_dz.x`, the
+`impact`. The printed block shows the two partial R^2^ values and the
+impact. `$r_yd.x` is the partial correlation of the outcome with the
+treatment given the covariates, which the impact calculation needs.
 
 In Stata the same numbers are printed below the bootstrap table and returned
-in `r(r2dxj_x)`, `r(r2yxj_dx)` and the matrix `r(benchmark_strength)`.
+in `r(r2dxj_x)`, `r(r2yxj_dx)`, `r(impact)`, `r(r_yd_x)` and the matrix
+`r(benchmark_strength)`.
+
+## The impact of the omitted variable
+
+The ITCV is stated as a product of two correlations of the omitted variable,
+with the outcome and with the treatment, both taken given the observed
+covariates (Frank, 2000). `sensemakr`'s two partial R^2^ values are almost,
+but not quite, the squares of those correlations: the outcome relationship,
+`r2yz.dx`, is measured given the treatment *as well as* the covariates. The
+recursion formula for partial correlations removes the treatment from the
+conditioning set,
+
+*r*~yz·x~ = *r*~yz·dx~ √((1 − *r*~yd·x~²)(1 − *r*~dz·x~²)) + *r*~yd·x~ *r*~dz·x~,
+
+where *r*~yd·x~ is the partial correlation of the outcome with the treatment
+given the covariates, a quantity computed from the fitted model
+(`r num(r.yd, 2, lead = FALSE)` here). The impact is then
+*r*~yz·x~ × *r*~dz·x~.
+
+One detail concerns signs. `sensemakr`'s bounds identify only the magnitudes
+of the two correlations, and the sign of a hypothetical variable is
+arbitrary. `bootmakr` takes *r*~dz·x~ as positive and gives *r*~yz·dx~ the sign
+of *r*~yd·x~, which is the configuration in which the omitted variable biases
+the estimate away from zero, the case that `sensemakr`'s adjustment removes
+(with `reduce = FALSE` the sign is reversed). The impact therefore carries
+the sign of the treatment effect, as the ITCV does.
+
+```{r impact-by-hand}
+r.yd <- out$benchmark_strength$r_yd.x
+imp  <- out$benchmark_strength$implied
+r.yz.x <- imp$r_yz.dx * sqrt((1 - r.yd^2) * (1 - imp$r_dz.x^2)) + r.yd * imp$r_dz.x
+cbind(kd = imp$kd, impact = r.yz.x * imp$r_dz.x)
+```
+
+The impact is on the same scale as a *conditional* ITCV, one stated in
+partial correlations given the covariates. An ITCV in zero-order
+correlations, the unconditional form that Lonati and Wulff (2026) use in
+their simulations, would need the omitted variable's relationship with the
+covariates as well; with a single control the assumption that the two are
+unrelated suffices, with several controls it is a substantive assumption
+that the sensitivity parameters do not identify. `bootmakr` therefore
+reports the conditional impact only.
 
 ## Where the numbers come from
 
@@ -96,6 +148,9 @@ sensemakr::partial_r2(fit, covariates = "ceo_tenure")
 
 # benchmark with the treatment, given the other covariates
 sensemakr::partial_r2(fit.d, covariates = "ceo_tenure")
+
+# outcome with the treatment, given the covariates (signed)
+sign(coef(fit)[["owner_ceo"]]) * sqrt(sensemakr::partial_r2(fit, covariates = "owner_ceo"))
 ```
 
 A partial R^2^ of a single covariate is a function of its *t* statistic and
@@ -147,10 +202,12 @@ bootstraps.
 ## What the block is for
 
 **It makes the assumption concrete.** "An omitted variable as strong as CEO
-tenure" becomes "an omitted variable with partial correlations of about
+tenure" becomes "an omitted variable with an impact of
+`r num(im$impact[2], 2, lead = FALSE)`, a partial correlation of about
 `r num(im$r_dz.x[2], 2, lead = FALSE)` with family-CEO status and
-`r num(im$r_yz.dx[2], 2, lead = FALSE)` with CEO pay". Readers can judge
-whether that is a little or a lot in their field.
+`r num(im$r_yz.x[2], 2, lead = FALSE)` with CEO pay". Readers can judge
+whether that is a little or a lot in their field, and compare it with the
+impact of observed variables.
 
 **It describes the data, not the inference.** Every number in the block is a
 function of the data alone. It is the same under conventional,
@@ -164,23 +221,68 @@ variable must be to overturn the result. That would require a critical value,
 which brings the standard error back in. Whether a given strength overturns
 the result is answered by the bootstrap confidence interval in the table
 above the block, and the strength at which it first does so is the
-[breakdown point](ceo-pay.html#the-breakdown-point). Note also that the
-outcome correlation in the block is conditional on the treatment, whereas
-the ITCV is stated in correlations that are not. The two scales are close
-relatives, but a number from the block should not be compared with an ITCV
-as if they were the same quantity.
+[breakdown point](ceo-pay.html#the-breakdown-point). In particular, the
+impact should never be compared with an ITCV computed from robust standard
+errors, which is not a product of correlations at all.
 
 ## When the assumed strength is impossible
 
 An omitted variable cannot explain more variance than there is left to
 explain. If `kd` is so large that the implied partial R^2^ reaches 1,
-`sensemakr` cannot compute the adjusted estimate. In a bootstrap this can
-happen in some replications and not in others, because the strength of the
-benchmark is re-estimated in every bootstrap sample. `bootmakr` drops such
-replications and reports how many failed. A few failures are of no concern.
-Many of them mean that the assumed strength is near the limit of what the
-data allow, and that a smaller `kd` or a weaker benchmark is the more
-informative question to ask.
+`sensemakr` cannot compute the adjusted estimate. With CEO tenure as the
+benchmark the limit is reached at `kd` = (1 − `r2dxj.x`) / `r2dxj.x`:
+
+```{r limit}
+(1 - r2d) / r2d
+```
+
+```{r limit-numbers, include = FALSE}
+kd.limit <- (1 - r2d) / r2d
+```
+
+Well below that limit, the bootstrap runs into the same wall in some
+replications and not in others, because the strength of the benchmark is
+re-estimated in every bootstrap sample. `bootmakr` drops such replications
+and reports how many failed. Here is a sweep that approaches the limit (200
+replications keep it quick):
+
+```{r impossible, warning = FALSE}
+near <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+                 benchmark_covariates = "ceo_tenure", kd = c(1, 3, 5, 5.5),
+                 cluster = "co_code", reps = 200, seed = 123, progress = FALSE)
+near
+```
+
+```{r impossible-numbers, include = FALSE}
+rn <- near$results
+if (near$N_fail == 0 && !.pending()) stop("No replication failed in the near-limit sweep: revise the text.")
+```
+
+The note below the table says that `r near$N_fail` of the 200 replications
+failed. At `kd = 5.5` the omitted variable is assumed to explain
+`r num(100 * rn$r2dz.x[rn$kd == 5.5], 0)` percent of the remaining
+variance of family-CEO status; the adjusted estimate has become large and
+negative, and its standard error is many times the estimate itself. Nothing
+is wrong with the computation. The assumption is simply absurd for these
+data, and the output says so in three ways: the failed replications, the
+exploding standard error, and an impact (`r num(rn$impact[rn$kd == 5.5], 2, lead = FALSE)`)
+that no observed covariate comes close to.
+
+Beyond the limit the full-sample estimate cannot be computed either, and the
+call stops with `sensemakr`'s message:
+
+```{r beyond, error = TRUE}
+beyond <- bootmakr(ceo.model, data = chen, treat = "owner_ceo",
+                   benchmark_covariates = "ceo_tenure", kd = 6,
+                   cluster = "co_code", reps = 200, seed = 123, progress = FALSE)
+```
+
+The Stata command behaves the same way: failed replications are counted
+below the table ("Warning: ... replications failed"; the number differs
+because Stata draws different bootstrap samples), and a `kd()` beyond the
+limit stops with error 3498, "Impossible value. Try a lower kd and/or ky". A few failures are of no concern. Many of them mean that the assumed
+strength is near the limit of what the data allow, and that a smaller `kd`
+or a weaker benchmark is the more informative question to ask.
 
 ## References
 
@@ -192,6 +294,10 @@ Cinelli, C., & Hazlett, C. (2020). Making sense of sensitivity: Extending
 omitted variable bias. *Journal of the Royal Statistical Society: Series B*,
 82(1), 39--67. <https://doi.org/10.1111/rssb.12348>
 
-Lonati, S., & Wulff, J. N. (2026). *Why you should not use the ITCV with
-robust standard errors (and what to do instead)*. SSRN working paper.
-<https://ssrn.com/abstract=6789678>
+Frank, K. A. (2000). Impact of a confounding variable on a regression
+coefficient. *Sociological Methods & Research*, 29(2), 147--194.
+<https://doi.org/10.1177/0049124100029002001>
+
+Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
+robust standard errors (and what to do instead). *Academy of Management
+Proceedings*, 2026(1). <https://doi.org/10.5465/AMPROC.2026.247bp>

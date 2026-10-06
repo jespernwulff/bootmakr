@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<meta name="description" content="Install the package, run a first bootstrap sensitivity analysis, and read its output.
+<meta name="description" content="Install the package, run a first bootstrap sensitivity analysis on a small simulated data set, and read its output.
 ">
 <title>Get started with bootmakr in R • bootmakr</title>
 <!-- favicons --><link rel="icon" type="image/png" sizes="16x16" href="../favicon-16x16.png">
@@ -22,7 +22,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/v4-shims.min.css" integrity="sha256-wZjR52fzng1pJHwx4aV2AO3yyTOXrcDW7jBpJtTwVxw=" crossorigin="anonymous">
 <!-- bootstrap-toc --><script src="https://cdn.rawgit.com/afeld/bootstrap-toc/v1.0.1/dist/bootstrap-toc.min.js"></script><!-- headroom.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/headroom.min.js" integrity="sha256-AsUX4SJE1+yuDu5+mAVzJbuYNPHj/WroHuZ8Ir/CkE0=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/jQuery.headroom.min.js" integrity="sha256-ZX/yNShbjqsohH1k95liqY9Gd8uOiE1S4vZc+9KQ1K4=" crossorigin="anonymous"></script><!-- clipboard.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.6/clipboard.min.js" integrity="sha256-inc5kl9MA1hkeYUt+EC3BhlIgyp/2jDIyBLS6k3UxPI=" crossorigin="anonymous"></script><!-- search --><script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/6.4.6/fuse.js" integrity="sha512-zv6Ywkjyktsohkbp9bb45V6tEMoWhzFzXis+LrMehmJZZSys19Yxf1dopHx7WzIKxr5tK2dVcYmaCk2uqdjF4A==" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/autocomplete.js/0.38.0/autocomplete.jquery.min.js" integrity="sha512-GU9ayf+66Xx2TmpxqJpliWbT5PiGYxpaG8rfnBEk1LL8l1KGkRShhngwdXK1UgqhAzWpZHSiYPc09/NwDQIGyg==" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/mark.min.js" integrity="sha512-5CYOlHXGh6QpOFA/TeTylKLWfB3ftPsde7AnmhuitiTX4K5SqCLBeKro6sPS8ilsz1Q4NRx3v8Ko2IBiszzdww==" crossorigin="anonymous"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet">
 <script src="../extra.js"></script><meta property="og:title" content="Get started with bootmakr in R">
-<meta property="og:description" content="Install the package, run a first bootstrap sensitivity analysis, and read its output.
+<meta property="og:description" content="Install the package, run a first bootstrap sensitivity analysis on a small simulated data set, and read its output.
 ">
 <meta property="og:image" content="https://jespernwulff.github.io/bootmakr/logo.svg">
 <!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js" integrity="sha256-nvJJv9wWKEm88qvoQl9ekL2J+k/RWIsaSScxxlsrv8k=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/config/TeX-AMS-MML_HTMLorMML.js" integrity="sha256-84DKXVJXs0/F8OTMzX4UR909+jtl4G7SPypPavF+GfA=" crossorigin="anonymous"></script><!--[if lt IE 9]>
@@ -38,7 +38,7 @@
     
     <a class="navbar-brand me-2" href="../index.html">bootmakr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,6 +60,7 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-guides">Guides</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-guides">
+    <a class="dropdown-item" href="../articles/why-bootstrap.html">Why bootstrap?</a>
     <a class="dropdown-item" href="../articles/benchmark-strength.html">How strong is the benchmark?</a>
     <a class="dropdown-item" href="../articles/clustering.html">Clustered and stratified data</a>
     <a class="dropdown-item" href="../articles/r-and-stata.html">R and Stata side by side</a>
@@ -68,7 +69,7 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-reference">Reference</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-reference">
-    <a class="dropdown-item" href="../reference/index.html">R functions</a>
+    <a class="dropdown-item" href="../reference/index.html">R functions and data</a>
     <a class="dropdown-item" href="../articles/stata-help.html">Stata help file</a>
   </div>
 </li>
@@ -114,19 +115,19 @@
     
 <!-- Generated from bootmakr.Rmd.orig by precompute/precompile.R. Edit the .orig file, not this one. -->
 <p>A regression coefficient from observational data is only as credible
-as the assumption that no important variable was left out. A sensitivity
-analysis asks how strong an omitted variable would have to be to change
-the conclusion. <code>sensemakr</code> (Cinelli &amp; Hazlett, 2020)
-answers with a concrete number: the coefficient you would have obtained
+as the assumption that no important variable was left out.
+<code>sensemakr</code> (Cinelli &amp; Hazlett, 2020) makes that
+assumption concrete: it reports the coefficient you would have obtained
 had a variable as strong as one of your observed covariates been
-omitted.</p>
-<p><code>bootmakr</code> adds inference to that number that does not
-rely on the conventional OLS variance formula. It bootstraps the whole
-procedure, so the standard error, confidence interval and
-<em>p</em>-value of the adjusted coefficient remain usable when the
-errors are heteroskedastic or correlated within clusters. This page
-shows a first analysis from start to finish. The same steps in Stata are
-in <a href="https://jespernwulff.github.io/bootmakr/articles/stata.html">Get
+omitted. <code>bootmakr</code> adds a standard error, a confidence
+interval and a <em>p</em>-value for that adjusted coefficient, obtained
+by resampling the data the way you would choose standard errors for the
+regression itself. This is needed because the usual tools, the impact
+threshold of a confounding variable (ITCV) and the analytic interval of
+<code>sensemakr</code>, break down when the regression calls for robust
+standard errors (Lonati &amp; Wulff, 2026); <a href="https://jespernwulff.github.io/bootmakr/articles/why-bootstrap.html">Why
+bootstrap?</a> shows why. This page shows a first analysis from start to
+finish. The same steps in Stata are in <a href="https://jespernwulff.github.io/bootmakr/articles/stata.html">Get
 started in Stata</a>.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
@@ -136,81 +137,86 @@ started in Stata</a>.</p>
 installed along with it.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("remotes")</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"jespernwulff/bootmakr"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># to read the example data used on this page</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"haven"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"jespernwulff/bootmakr"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="the-example">The example<a class="anchor" aria-label="anchor" href="#the-example"></a>
+<h2 id="the-example-data">The example data<a class="anchor" aria-label="anchor" href="#the-example-data"></a>
 </h2>
-<p>We use the data of Chen, Chittoor, and Vissa (2021), who ask whether
-CEOs that belong to the family controlling the firm are paid more than
-professional CEOs. The authors share their data on OSF, and
-<code>haven</code> reads the file from there.</p>
+<p>The package comes with <code>firms</code>, a simulated panel of 250
+firms observed for 20 years. Because the data are simulated, we know the
+truth: the effect of <code>x</code> on <code>y</code> is 0.25. Two
+firm-level characteristics affect both <code>x</code> and
+<code>y</code>, an observed control <code>c</code> and a variable
+<code>q</code> that we pretend not to have. The within-firm components
+of <code>x</code> and of the disturbance are persistent, so standard
+errors must be clustered by firm. (The data are a variant of the
+simulated example in Lonati and Wulff, 2026; see <code><a href="../reference/firms.html">?firms</a></code> for
+how they were generated.)</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://jespernwulff.github.io/bootmakr/">bootmakr</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://haven.tidyverse.org" class="external-link">haven</a></span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">osf</span>  <span class="op">&lt;-</span> <span class="st">"https://osf.io/download/stk7y/?view_only=885d1ed5498c4b3c8a1194882e468286"</span></span>
-<span><span class="va">chen</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://haven.tidyverse.org/reference/read_dta.html" class="external-link">read_dta</a></span><span class="op">(</span><span class="va">osf</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">ceo.model</span> <span class="op">&lt;-</span> <span class="va">lg_ceopay</span> <span class="op">~</span> <span class="va">owner_ceo</span> <span class="op">+</span> <span class="va">ceo_tenure</span> <span class="op">+</span> <span class="va">PA_nic3_med</span> <span class="op">+</span> <span class="va">ceo_edu_dummy</span> <span class="op">+</span></span>
-<span>  <span class="va">lg_sales</span> <span class="op">+</span> <span class="va">firm_age</span> <span class="op">+</span> <span class="va">promoters_pct</span> <span class="op">+</span> <span class="va">institutions_pct</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">year</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">nic_code_1digit</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/lm.html" class="external-link">lm</a></span><span class="op">(</span><span class="va">ceo.model</span>, data <span class="op">=</span> <span class="va">chen</span><span class="op">)</span><span class="op">)</span><span class="op">[</span><span class="st">"owner_ceo"</span><span class="op">]</span></span>
-<span><span class="co">#&gt; owner_ceo </span></span>
-<span><span class="co">#&gt; 0.3269285</span></span></code></pre></div>
-<p>The data hold 2,011 firm-year observations of 277 Indian firms.
-<code>lg_ceopay</code> is the logarithm of total CEO pay,
-<code>owner_ceo</code> indicates a family CEO, and the remaining
-variables are controls: CEO tenure and education, firm sales and age,
-ownership shares, and year and industry indicators. The coefficient of
-<code>owner_ceo</code> is the published one (Model 2 of their Table 2).
-Family CEOs earn more.</p>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"firms"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">firms</span><span class="op">)</span></span>
+<span><span class="co">#&gt;   firm year         y         x          c         q</span></span>
+<span><span class="co">#&gt; 1    1    1 1.1135241 0.7462263 -0.3820026 0.6451423</span></span>
+<span><span class="co">#&gt; 2    1    2 0.5718906 0.5223299 -0.3820026 0.6451423</span></span>
+<span><span class="co">#&gt; 3    1    3 0.6579784 0.8940660 -0.3820026 0.6451423</span></span>
+<span><span class="co">#&gt; 4    1    4 1.2859237 1.2648760 -0.3820026 0.6451423</span></span>
+<span><span class="co">#&gt; 5    1    5 1.3447777 1.2004796 -0.3820026 0.6451423</span></span>
+<span><span class="co">#&gt; 6    1    6 0.8935023 0.8371407 -0.3820026 0.6451423</span></span></code></pre></div>
+<p>Here is the regression a researcher without <code>q</code> would
+run.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/lm.html" class="external-link">lm</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="va">c</span>, data <span class="op">=</span> <span class="va">firms</span><span class="op">)</span><span class="op">)</span><span class="op">[</span><span class="st">"x"</span><span class="op">]</span></span>
+<span><span class="co">#&gt;         x </span></span>
+<span><span class="co">#&gt; 0.4445283</span></span></code></pre></div>
+<p>The coefficient is 0.44 instead of 0.25, because <code>q</code>
+drives both <code>x</code> and <code>y</code>. With real data you would
+not know this. What you can ask is how the result would change if a
+variable as strong as something you <em>do</em> observe had been left
+out. That is the question <code>bootmakr</code> answers.</p>
 </div>
 <div class="section level2">
 <h2 id="a-first-analysis">A first analysis<a class="anchor" aria-label="anchor" href="#a-first-analysis"></a>
 </h2>
-<p>Could an omitted variable explain this away? To answer,
-<code>sensemakr</code> needs a <em>benchmark</em>: an observed covariate
-that sets the scale for the omitted variable. We take the age of the
-firm and ask what the coefficient of <code>owner_ceo</code> would be had
-a variable <em>as strong as</em> <code>firm_age</code> been omitted.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">first</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/bootmakr.html">bootmakr</a></span><span class="op">(</span><span class="va">ceo.model</span>, data <span class="op">=</span> <span class="va">chen</span>, treat <span class="op">=</span> <span class="st">"owner_ceo"</span>,</span>
-<span>                  benchmark_covariates <span class="op">=</span> <span class="st">"firm_age"</span>,</span>
-<span>                  cluster <span class="op">=</span> <span class="st">"co_code"</span>,</span>
+<p><code>sensemakr</code> needs a <em>benchmark</em>: an observed
+covariate that sets the scale for the omitted variable. We take
+<code>c</code> and ask what the coefficient of <code>x</code> would be
+had a variable <em>as strong as</em> <code>c</code> been omitted. In
+these data that is exactly what <code>q</code> is.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">first</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/bootmakr.html">bootmakr</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="va">c</span>, data <span class="op">=</span> <span class="va">firms</span>, treat <span class="op">=</span> <span class="st">"x"</span>,</span>
+<span>                  benchmark_covariates <span class="op">=</span> <span class="st">"c"</span>,</span>
+<span>                  cluster <span class="op">=</span> <span class="st">"firm"</span>,</span>
 <span>                  seed <span class="op">=</span> <span class="fl">123</span>, progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="va">first</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Call:</span></span>
-<span><span class="co">#&gt; bootmakr(formula = ceo.model, data = chen, treat = "owner_ceo", </span></span>
-<span><span class="co">#&gt;     benchmark_covariates = "firm_age", seed = 123, cluster = "co_code", </span></span>
-<span><span class="co">#&gt;     progress = FALSE)</span></span>
+<span><span class="co">#&gt; bootmakr(formula = y ~ x + c, data = firms, treat = "x", benchmark_covariates = "c", </span></span>
+<span><span class="co">#&gt;     seed = 123, cluster = "firm", progress = FALSE)</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; Bootstrap sensitivity analysis (1,000 reps, n = 2,011, 277 clusters)</span></span>
-<span><span class="co">#&gt; Benchmark: firm_age | kd = 1, ky = 1</span></span>
+<span><span class="co">#&gt; Bootstrap sensitivity analysis (1,000 reps, n = 5,000, 250 clusters)</span></span>
+<span><span class="co">#&gt; Benchmark: c | kd = 1, ky = 1</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Adjusted estimates (percentile 95% CI):</span></span>
-<span><span class="co">#&gt;           Estimate Std. Err     2.5%    97.5% Pr(&gt;|0|)   </span></span>
-<span><span class="co">#&gt; owner_ceo 0.303186 0.106166 0.078121 0.499017    0.006 **</span></span>
+<span><span class="co">#&gt;   Estimate Std. Err     2.5%    97.5% Pr(&gt;|0|)  </span></span>
+<span><span class="co">#&gt; x 0.252134 0.076236 0.087365 0.394215     0.01 *</span></span>
 <span><span class="co">#&gt; ---</span></span>
 <span><span class="co">#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
 <span><span class="co">#&gt; (H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Benchmark strength (descriptive: computed from the data, no standard errors involved)</span></span>
-<span><span class="co">#&gt;                              Partial R2 |Partial r|</span></span>
-<span><span class="co">#&gt; firm_age with treatment | X      0.0394       0.198</span></span>
-<span><span class="co">#&gt; firm_age with outcome | D, X     0.0023       0.047</span></span>
+<span><span class="co">#&gt;                       Partial R2 |Partial r|</span></span>
+<span><span class="co">#&gt; c with treatment | X      0.1433       0.379</span></span>
+<span><span class="co">#&gt; c with outcome | D, X     0.1248       0.353</span></span>
 <span><span class="co">#&gt; Implied strength of the omitted variable (sensemakr bounds):</span></span>
-<span><span class="co">#&gt;                  kd   ky R2dz.x R2yz.dx |r_dz.x| |r_yz.dx|</span></span>
-<span><span class="co">#&gt; 1.00x firm_age 1.00 1.00 0.0410  0.0024    0.202     0.049</span></span>
+<span><span class="co">#&gt;           kd   ky R2dz.x R2yz.dx Impact</span></span>
+<span><span class="co">#&gt; 1.00x c 1.00 1.00 0.1673  0.1998  0.222</span></span>
 <span><span class="co">#&gt; (R2dz.x, R2yz.dx: partial R2 of the omitted variable with the treatment given the</span></span>
-<span><span class="co">#&gt;  covariates, and with the outcome given treatment and covariates; |r| = square root,</span></span>
-<span><span class="co">#&gt;  i.e. the partial-correlation scale of the ITCV. Descriptive only: independent of the</span></span>
-<span><span class="co">#&gt;  variance estimator. No t-implied correlation or threshold is reported.)</span></span></code></pre></div>
+<span><span class="co">#&gt;  covariates, and with the outcome given treatment and covariates. Impact: product of</span></span>
+<span><span class="co">#&gt;  its partial correlations with the outcome and with the treatment, both given the</span></span>
+<span><span class="co">#&gt;  covariates only, i.e. the scale of the ITCV; signed so that the omitted variable</span></span>
+<span><span class="co">#&gt;  biases the estimate away from zero. Descriptive only: independent of the variance</span></span>
+<span><span class="co">#&gt;  estimator, and not a threshold.)</span></span></code></pre></div>
 <p>The call names the model, the treatment (<code>treat</code>), the
 benchmark (<code>benchmark_covariates</code>) and, because observations
 of the same firm are not independent, the variable that identifies the
@@ -219,157 +225,169 @@ its default: an omitted variable exactly as strong as the benchmark
 (<code>kd = 1</code>) and 1,000 bootstrap replications.
 <code>seed</code> makes the result reproducible, and
 <code>progress = FALSE</code> switches off the progress bar, which is
-useful on screen but not in a document. The run takes about 20
+useful on screen but not in a document. The run takes about 15
 seconds.</p>
 <div class="section level3">
 <h3 id="reading-the-output">Reading the output<a class="anchor" aria-label="anchor" href="#reading-the-output"></a>
 </h3>
 <p><strong>The adjusted estimate.</strong> Had a variable as strong as
-<code>firm_age</code> been omitted, the coefficient of
-<code>owner_ceo</code> would be 0.303 rather than 0.327. This is the
-estimate <code>sensemakr</code> reports for the same benchmark. It does
-not involve the bootstrap.</p>
+<code>c</code> been omitted, the coefficient of <code>x</code> would be
+0.252 rather than 0.445. This is the estimate <code>sensemakr</code>
+reports for the same benchmark, and it is close to the true 0.25. It
+does not involve the bootstrap.</p>
 <p><strong>Its uncertainty.</strong> The remaining columns come from the
 bootstrap. In each of the 1,000 replications <code>bootmakr</code> draws
 firms with replacement, refits the regression and recomputes the
 adjusted estimate. The standard deviation of those 1,000 values is the
-standard error (0.106), their 2.5th and 97.5th percentiles form the 95
-percent confidence interval (0.078 to 0.499), and the <em>p</em>-value
-(.006) is twice the smaller of the two shares of replications that fall
-on either side of zero. The pay premium of family CEOs remains positive
+standard error (0.076), their 2.5th and 97.5th percentiles form the 95
+percent confidence interval (0.087 to 0.394), and the <em>p</em>-value
+(.010) is twice the smaller of the two shares of replications that fall
+on either side of zero. The effect of <code>x</code> remains positive
 and statistically distinguishable from zero even if an omitted variable
-as strong as firm age is at work.</p>
+as strong as <code>c</code> is at work.</p>
 <p><strong>The benchmark strength.</strong> The last block says what “as
-strong as <code>firm_age</code>” means. Firm age explains 3.9 percent of
-the variance of the treatment that the other covariates leave
-unexplained and 0.2 percent of the remaining variance of the outcome,
-which correspond to partial correlations of .20 and .05. The second
-table gives the strength of the omitted variable these numbers imply.
-All of this is computed from the data. No standard error is involved, so
-the block is the same whatever variance estimator you prefer. See <a href="https://jespernwulff.github.io/bootmakr/articles/benchmark-strength.html">How
+strong as <code>c</code>” means. <code>c</code> explains 14.3 percent of
+the variance of <code>x</code> and 12.5 percent of the variance of
+<code>y</code> that <code>x</code> leaves unexplained. The omitted
+variable this implies has an <em>impact</em> of .22: the product of its
+partial correlations with <code>y</code> and with <code>x</code>, which
+is the scale on which the ITCV is stated. All of this is computed from
+the data. No standard error is involved, so the block is the same
+whatever variance estimator you prefer. See <a href="https://jespernwulff.github.io/bootmakr/articles/benchmark-strength.html">How
 strong is the benchmark?</a> for the details.</p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="from-one-strength-to-many-the-breakdown-point">From one strength to many: the breakdown point<a class="anchor" aria-label="anchor" href="#from-one-strength-to-many-the-breakdown-point"></a>
 </h2>
-<p>An omitted variable as strong as firm age does not overturn the
+<p>An omitted variable as strong as <code>c</code> does not overturn the
 result. How much stronger would it have to be? Give <code>kd</code>
 several values and <code>bootmakr</code> evaluates each of them on the
 same bootstrap samples.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">sweep</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/bootmakr.html">bootmakr</a></span><span class="op">(</span><span class="va">ceo.model</span>, data <span class="op">=</span> <span class="va">chen</span>, treat <span class="op">=</span> <span class="st">"owner_ceo"</span>,</span>
-<span>                  benchmark_covariates <span class="op">=</span> <span class="st">"firm_age"</span>,</span>
-<span>                  kd <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">4</span>, by <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span>,</span>
-<span>                  cluster <span class="op">=</span> <span class="st">"co_code"</span>,</span>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sweep</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/bootmakr.html">bootmakr</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="va">c</span>, data <span class="op">=</span> <span class="va">firms</span>, treat <span class="op">=</span> <span class="st">"x"</span>,</span>
+<span>                  benchmark_covariates <span class="op">=</span> <span class="st">"c"</span>,</span>
+<span>                  kd <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">1.5</span>, by <span class="op">=</span> <span class="fl">0.25</span><span class="op">)</span>,</span>
+<span>                  cluster <span class="op">=</span> <span class="st">"firm"</span>,</span>
 <span>                  seed <span class="op">=</span> <span class="fl">123</span>, progress <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="va">sweep</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Call:</span></span>
-<span><span class="co">#&gt; bootmakr(formula = ceo.model, data = chen, treat = "owner_ceo", </span></span>
-<span><span class="co">#&gt;     benchmark_covariates = "firm_age", kd = seq(0.5, 4, by = 0.5), </span></span>
-<span><span class="co">#&gt;     seed = 123, cluster = "co_code", progress = FALSE)</span></span>
+<span><span class="co">#&gt; bootmakr(formula = y ~ x + c, data = firms, treat = "x", benchmark_covariates = "c", </span></span>
+<span><span class="co">#&gt;     kd = seq(0.5, 1.5, by = 0.25), seed = 123, cluster = "firm", </span></span>
+<span><span class="co">#&gt;     progress = FALSE)</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; Bootstrap sensitivity analysis (1,000 reps, n = 2,011, 277 clusters)</span></span>
-<span><span class="co">#&gt; Benchmark: firm_age | kd = 0.5 1 1.5 2 2.5 3 3.5 4, ky = 0.5 1 1.5 2 2.5 3 3.5 4</span></span>
+<span><span class="co">#&gt; Bootstrap sensitivity analysis (1,000 reps, n = 5,000, 250 clusters)</span></span>
+<span><span class="co">#&gt; Benchmark: c | kd = 0.5 0.75 1 1.25 1.5, ky = 0.5 0.75 1 1.25 1.5</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Adjusted estimates (percentile 95% CI):</span></span>
-<span><span class="co">#&gt;                    Estimate Std. Err      2.5%    97.5% Pr(&gt;|0|)    </span></span>
-<span><span class="co">#&gt; owner_ceo (kd=0.5) 0.315192 0.104654  0.100293 0.511840        0 ***</span></span>
-<span><span class="co">#&gt; owner_ceo (kd=1)   0.303186 0.106166  0.078121 0.499017    0.006  **</span></span>
-<span><span class="co">#&gt; owner_ceo (kd=1.5) 0.290898 0.109866  0.056755 0.485586     0.01   *</span></span>
-<span><span class="co">#&gt; owner_ceo (kd=2)   0.278311 0.116118  0.022732 0.481219     0.03   *</span></span>
-<span><span class="co">#&gt; owner_ceo (kd=2.5) 0.265410 0.125440 -0.008964 0.469772     0.06   .</span></span>
-<span><span class="co">#&gt; owner_ceo (kd=3)   0.252178 0.138889 -0.051710 0.465226    0.108    </span></span>
-<span><span class="co">#&gt; owner_ceo (kd=3.5) 0.238594 0.159611 -0.113650 0.462329    0.168    </span></span>
-<span><span class="co">#&gt; owner_ceo (kd=4)   0.224639 0.203581 -0.186936 0.459581     0.21    </span></span>
+<span><span class="co">#&gt;             Estimate Std. Err      2.5%    97.5% Pr(&gt;|0|)    </span></span>
+<span><span class="co">#&gt; x (kd=0.5)  0.354042 0.052479  0.253451 0.456146        0 ***</span></span>
+<span><span class="co">#&gt; x (kd=0.75) 0.304696 0.062805  0.176416 0.425069        0 ***</span></span>
+<span><span class="co">#&gt; x (kd=1)    0.252134 0.076236  0.087365 0.394215     0.01   *</span></span>
+<span><span class="co">#&gt; x (kd=1.25) 0.195903 0.093321 -0.013573 0.363798    0.066   .</span></span>
+<span><span class="co">#&gt; x (kd=1.5)  0.135458 0.115036 -0.126653 0.328123    0.276    </span></span>
 <span><span class="co">#&gt; ---</span></span>
 <span><span class="co">#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
 <span><span class="co">#&gt; (H0: adjusted estimate = 0; CI and p-value from percentile bootstrap)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Benchmark strength (descriptive: computed from the data, no standard errors involved)</span></span>
-<span><span class="co">#&gt;                              Partial R2 |Partial r|</span></span>
-<span><span class="co">#&gt; firm_age with treatment | X      0.0394       0.198</span></span>
-<span><span class="co">#&gt; firm_age with outcome | D, X     0.0023       0.047</span></span>
+<span><span class="co">#&gt;                       Partial R2 |Partial r|</span></span>
+<span><span class="co">#&gt; c with treatment | X      0.1433       0.379</span></span>
+<span><span class="co">#&gt; c with outcome | D, X     0.1248       0.353</span></span>
 <span><span class="co">#&gt; Implied strength of the omitted variable (sensemakr bounds):</span></span>
-<span><span class="co">#&gt;                  kd   ky R2dz.x R2yz.dx |r_dz.x| |r_yz.dx|</span></span>
-<span><span class="co">#&gt; 0.50x firm_age 0.50 0.50 0.0205  0.0012    0.143     0.035</span></span>
-<span><span class="co">#&gt; 1.00x firm_age 1.00 1.00 0.0410  0.0024    0.202     0.049</span></span>
-<span><span class="co">#&gt; 1.50x firm_age 1.50 1.50 0.0615  0.0037    0.248     0.061</span></span>
-<span><span class="co">#&gt; 2.00x firm_age 2.00 2.00 0.0820  0.0049    0.286     0.070</span></span>
-<span><span class="co">#&gt; 2.50x firm_age 2.50 2.50 0.1025  0.0062    0.320     0.078</span></span>
-<span><span class="co">#&gt; 3.00x firm_age 3.00 3.00 0.1229  0.0074    0.351     0.086</span></span>
-<span><span class="co">#&gt; 3.50x firm_age 3.50 3.50 0.1434  0.0087    0.379     0.093</span></span>
-<span><span class="co">#&gt; 4.00x firm_age 4.00 4.00 0.1639  0.0099    0.405     0.100</span></span>
+<span><span class="co">#&gt;           kd   ky R2dz.x R2yz.dx Impact</span></span>
+<span><span class="co">#&gt; 0.50x c 0.50 0.50 0.0836  0.0973  0.113</span></span>
+<span><span class="co">#&gt; 0.75x c 0.75 0.75 0.1255  0.1478  0.168</span></span>
+<span><span class="co">#&gt; 1.00x c 1.00 1.00 0.1673  0.1998  0.222</span></span>
+<span><span class="co">#&gt; 1.25x c 1.25 1.25 0.2091  0.2536  0.274</span></span>
+<span><span class="co">#&gt; 1.50x c 1.50 1.50 0.2509  0.3093  0.324</span></span>
 <span><span class="co">#&gt; (R2dz.x, R2yz.dx: partial R2 of the omitted variable with the treatment given the</span></span>
-<span><span class="co">#&gt;  covariates, and with the outcome given treatment and covariates; |r| = square root,</span></span>
-<span><span class="co">#&gt;  i.e. the partial-correlation scale of the ITCV. Descriptive only: independent of the</span></span>
-<span><span class="co">#&gt;  variance estimator. No t-implied correlation or threshold is reported.)</span></span></code></pre></div>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<span><span class="co">#&gt;  covariates, and with the outcome given treatment and covariates. Impact: product of</span></span>
+<span><span class="co">#&gt;  its partial correlations with the outcome and with the treatment, both given the</span></span>
+<span><span class="co">#&gt;  covariates only, i.e. the scale of the ITCV; signed so that the omitted variable</span></span>
+<span><span class="co">#&gt;  biases the estimate away from zero. Descriptive only: independent of the variance</span></span>
+<span><span class="co">#&gt;  estimator, and not a threshold.)</span></span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">sweep</span>, type <span class="op">=</span> <span class="st">"kd_sweep"</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="data:image/png;base64,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" alt="Adjusted estimate and bootstrap 95 percent confidence interval for an omitted variable 0.5 to 4 times as strong as firm age. Solid markers: p &lt; .05."><div class="figcaption">Adjusted estimate and bootstrap 95 percent
-confidence interval for an omitted variable 0.5 to 4 times as strong as
-firm age. Solid markers: p &lt; .05.</div>
+<img src="data:image/png;base64,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" alt="Adjusted estimate and bootstrap 95 percent confidence interval for an omitted variable 0.5 to 1.5 times as strong as c. Solid markers: p &lt; .05."><div class="figcaption">Adjusted estimate and bootstrap 95 percent
+confidence interval for an omitted variable 0.5 to 1.5 times as strong
+as c. Solid markers: p &lt; .05.</div>
 </div>
 <p>The adjusted estimate shrinks as the assumed omitted variable grows
 stronger, and its confidence interval widens. In this run the result
-holds up to an omitted variable 2 times as strong as firm age and breaks
-down at 2.5 times: from there on the interval includes zero. That
-<em>breakdown point</em> is a compact summary of how robust the finding
-is. (A <em>p</em>-value printed as 0 means that none of the 1,000
-replications fell on the other side of zero.)</p>
-<p>A <em>p</em>-value this close to .05 can fall on either side of it
-from one seed to the next when only 1,000 replications are drawn. Before
-reporting a breakdown point, increase <code>reps</code> and check that
-the result has settled. The <a href="https://jespernwulff.github.io/bootmakr/articles/ceo-pay.html">worked
-example</a> repeats this sweep with 10,000 replications and puts the
-breakdown point at 2.5.</p>
+holds up to an omitted variable 1 times as strong as <code>c</code> and
+breaks down at 1.25 times: from there on the interval includes zero.
+That <em>breakdown point</em> is a compact summary of how robust the
+finding is. (A <em>p</em>-value printed as 0 means that none of the
+1,000 replications fell on the other side of zero.)</p>
+</div>
+<div class="section level2">
+<h2 id="checking-the-answer">Checking the answer<a class="anchor" aria-label="anchor" href="#checking-the-answer"></a>
+</h2>
+<p>Simulated data have one advantage over real ones: the omitted
+variable is in the file. The regression that includes <code>q</code>
+gives</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/lm.html" class="external-link">lm</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">x</span> <span class="op">+</span> <span class="va">c</span> <span class="op">+</span> <span class="va">q</span>, data <span class="op">=</span> <span class="va">firms</span><span class="op">)</span><span class="op">)</span><span class="op">[</span><span class="st">"x"</span><span class="op">]</span></span>
+<span><span class="co">#&gt;         x </span></span>
+<span><span class="co">#&gt; 0.2286068</span></span></code></pre></div>
+<p>which lies inside the bootstrap interval at <code>kd = 1</code>. The
+<a href="https://jespernwulff.github.io/bootmakr/articles/why-bootstrap.html">Why
+bootstrap?</a> article uses the same data to show what the ITCV and the
+analytic interval of <code>sensemakr</code> make of this example.</p>
 </div>
 <div class="section level2">
 <h2 id="working-with-the-results">Working with the results<a class="anchor" aria-label="anchor" href="#working-with-the-results"></a>
 </h2>
 <p>The object returned by <code><a href="../reference/bootmakr.html">bootmakr()</a></code> keeps everything that
 was computed.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sweep</span><span class="op">$</span><span class="va">results</span></span>
-<span><span class="co">#&gt;    kd  estimate        se     ci_lower  ci_upper pvalue     r2dz.x     r2yz.dx</span></span>
-<span><span class="co">#&gt; 1 0.5 0.3151919 0.1046543  0.100293388 0.5118398  0.000 0.02049005 0.001222638</span></span>
-<span><span class="co">#&gt; 2 1.0 0.3031863 0.1061664  0.078120963 0.4990174  0.006 0.04098009 0.002449320</span></span>
-<span><span class="co">#&gt; 3 1.5 0.2908978 0.1098661  0.056754919 0.4855863  0.010 0.06147014 0.003680281</span></span>
-<span><span class="co">#&gt; 4 2.0 0.2783112 0.1161178  0.022732028 0.4812189  0.030 0.08196018 0.004915774</span></span>
-<span><span class="co">#&gt; 5 2.5 0.2654103 0.1254399 -0.008963543 0.4697724  0.060 0.10245023 0.006156077</span></span>
-<span><span class="co">#&gt; 6 3.0 0.2521776 0.1388887 -0.051710034 0.4652260  0.108 0.12294027 0.007401491</span></span>
-<span><span class="co">#&gt; 7 3.5 0.2385940 0.1596111 -0.113649680 0.4623294  0.168 0.14343032 0.008652344</span></span>
-<span><span class="co">#&gt; 8 4.0 0.2246388 0.2035807 -0.186935582 0.4595810  0.210 0.16392036 0.009908994</span></span></code></pre></div>
+<span><span class="co">#&gt;     kd  estimate         se    ci_lower  ci_upper pvalue     r2dz.x    r2yz.dx</span></span>
+<span><span class="co">#&gt; 1 0.50 0.3540423 0.05247928  0.25345109 0.4561464  0.000 0.08363943 0.09728672</span></span>
+<span><span class="co">#&gt; 2 0.75 0.3046965 0.06280549  0.17641581 0.4250691  0.000 0.12545914 0.14781734</span></span>
+<span><span class="co">#&gt; 3 1.00 0.2521337 0.07623598  0.08736489 0.3942151  0.010 0.16727885 0.19983870</span></span>
+<span><span class="co">#&gt; 4 1.25 0.1959030 0.09332121 -0.01357331 0.3637976  0.066 0.20909857 0.25356964</span></span>
+<span><span class="co">#&gt; 5 1.50 0.1354581 0.11503646 -0.12665311 0.3281231  0.276 0.25091828 0.30927622</span></span>
+<span><span class="co">#&gt;      impact</span></span>
+<span><span class="co">#&gt; 1 0.1134982</span></span>
+<span><span class="co">#&gt; 2 0.1682740</span></span>
+<span><span class="co">#&gt; 3 0.2216809</span></span>
+<span><span class="co">#&gt; 4 0.2736747</span></span>
+<span><span class="co">#&gt; 5 0.3242071</span></span></code></pre></div>
 <p><code>estimate</code> to <code>pvalue</code> are the columns of the
 printed table. <code>r2dz.x</code> and <code>r2yz.dx</code> are the
 partial R<sup>2</sup> values of the omitted variable assumed in each
-row. The benchmark-strength block is stored as a list of two data
-frames.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+row, and <code>impact</code> its impact. The benchmark-strength block is
+stored as a list.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">first</span><span class="op">$</span><span class="va">benchmark_strength</span></span>
 <span><span class="co">#&gt; $type</span></span>
 <span><span class="co">#&gt; [1] "single"</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $observed</span></span>
-<span><span class="co">#&gt;   benchmark    r2dxj.x    r2yxj.dx   r_dxj.x   r_yxj.dx</span></span>
-<span><span class="co">#&gt; 1  firm_age 0.03936683 0.002251396 0.1984108 0.04744888</span></span>
+<span><span class="co">#&gt;   benchmark   r2dxj.x  r2yxj.dx   r_dxj.x  r_yxj.dx</span></span>
+<span><span class="co">#&gt; 1         c 0.1433067 0.1247742 0.3785587 0.3532339</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; $implied</span></span>
-<span><span class="co">#&gt;   benchmark kd ky     r2dz.x    r2yz.dx    r_dz.x    r_yz.dx</span></span>
-<span><span class="co">#&gt; 1  firm_age  1  1 0.04098009 0.00244932 0.2024354 0.04949061</span></span></code></pre></div>
+<span><span class="co">#&gt;   benchmark kd ky    r2dz.x   r2yz.dx    r_dz.x   r_yz.dx    r_yz.x    impact</span></span>
+<span><span class="co">#&gt; 1         c  1  1 0.1672789 0.1998387 0.4089974 0.4470332 0.5420107 0.2216809</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $r_yd.x</span></span>
+<span><span class="co">#&gt; [1] 0.4201003</span></span></code></pre></div>
 <p>The bootstrap draws themselves are in <code>$boot_samples</code>, one
 column per value of <code>kd</code>, so the distribution can be
 inspected without rerunning anything.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/quantile.html" class="external-link">quantile</a></span><span class="op">(</span><span class="va">first</span><span class="op">$</span><span class="va">boot_samples</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.025</span>, <span class="fl">0.5</span>, <span class="fl">0.975</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt;       2.5%        50%      97.5% </span></span>
-<span><span class="co">#&gt; 0.07812096 0.30897134 0.49901745</span></span>
+<span><span class="co">#&gt; 0.08736489 0.24821315 0.39421508</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">first</span>, type <span class="op">=</span> <span class="st">"histogram"</span><span class="op">)</span></span></code></pre></div>
 <div class="float">
-<img src="data:image/png;base64,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" alt="Bootstrap distribution of the adjusted estimate at kd = 1. The dashed line marks the estimate in the original sample."><div class="figcaption">Bootstrap distribution of the adjusted estimate
+<img src="data:image/png;base64,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" alt="Bootstrap distribution of the adjusted estimate at kd = 1. The dashed line marks the estimate in the original sample."><div class="figcaption">Bootstrap distribution of the adjusted estimate
 at kd = 1. The dashed line marks the estimate in the original
 sample.</div>
 </div>
@@ -407,12 +425,18 @@ close to the significance threshold check that it has settled with the
 </h2>
 <ul>
 <li>The <a href="https://jespernwulff.github.io/bootmakr/articles/ceo-pay.html">worked
-example</a> takes the same study through a complete analysis: the choice
-of standard errors, a stronger benchmark, a grouped benchmark and the
-convergence check.</li>
+example</a> takes a published study through a complete analysis: the
+choice of standard errors, the benchmark, the breakdown point, a grouped
+benchmark and the convergence check.</li>
+<li>
+<a href="https://jespernwulff.github.io/bootmakr/articles/why-bootstrap.html">Why
+bootstrap?</a> shows, on these data, why the ITCV and the analytic
+interval of <code>sensemakr</code> cannot be trusted with robust
+standard errors.</li>
 <li>
 <code><a href="../reference/bootmakr.html">?bootmakr</a></code> documents every argument,
-<code><a href="../reference/plot.bootmakr.html">?plot.bootmakr</a></code> the three plots.</li>
+<code><a href="../reference/plot.bootmakr.html">?plot.bootmakr</a></code> the three plots, and <code><a href="../reference/firms.html">?firms</a></code> the
+data.</li>
 <li>The Stata command of the same name runs the same analysis. See <a href="https://jespernwulff.github.io/bootmakr/articles/r-and-stata.html">R
 and Stata side by side</a>.</li>
 </ul>
@@ -420,15 +444,15 @@ and Stata side by side</a>.</li>
 <div class="section level2">
 <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>
 </h2>
-<p>Chen, G., Chittoor, R., &amp; Vissa, B. (2021). Does nepotism run in
-the family? CEO pay and pay-performance sensitivity in Indian family
-firms. <em>Strategic Management Journal</em>, 42(7), 1326–1343. <a href="https://doi.org/10.1002/smj.3263" class="external-link uri">https://doi.org/10.1002/smj.3263</a></p>
 <p>Cinelli, C., &amp; Hazlett, C. (2020). Making sense of sensitivity:
 Extending omitted variable bias. <em>Journal of the Royal Statistical
 Society: Series B</em>, 82(1), 39–67. <a href="https://doi.org/10.1111/rssb.12348" class="external-link uri">https://doi.org/10.1111/rssb.12348</a></p>
-<p>Lonati, S., &amp; Wulff, J. N. (2026). <em>Why you should not use the
-ITCV with robust standard errors (and what to do instead)</em>. SSRN
-working paper. <a href="https://ssrn.com/abstract=6789678" class="external-link uri">https://ssrn.com/abstract=6789678</a></p>
+<p>Cinelli, C., Ferwerda, J., &amp; Hazlett, C. (2024). sensemakr:
+Sensitivity analysis tools for OLS in R and Stata. <em>Observational
+Studies</em>, 10(2), 93–127. <a href="https://doi.org/10.1353/obs.2024.a946583" class="external-link uri">https://doi.org/10.1353/obs.2024.a946583</a></p>
+<p>Lonati, S., &amp; Wulff, J. N. (2026). Why you should not use the
+ITCV with robust standard errors (and what to do instead). <em>Academy
+of Management Proceedings</em>, 2026(1). <a href="https://doi.org/10.5465/AMPROC.2026.247bp" class="external-link uri">https://doi.org/10.5465/AMPROC.2026.247bp</a></p>
 </div>
   </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
     </nav></aside>

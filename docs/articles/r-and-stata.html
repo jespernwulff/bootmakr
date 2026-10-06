@@ -36,7 +36,7 @@
     
     <a class="navbar-brand me-2" href="../index.html">bootmakr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
     
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,6 +58,7 @@
 <li class="active nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-guides">Guides</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-guides">
+    <a class="dropdown-item" href="../articles/why-bootstrap.html">Why bootstrap?</a>
     <a class="dropdown-item" href="../articles/benchmark-strength.html">How strong is the benchmark?</a>
     <a class="dropdown-item" href="../articles/clustering.html">Clustered and stratified data</a>
     <a class="dropdown-item" href="../articles/r-and-stata.html">R and Stata side by side</a>
@@ -66,7 +67,7 @@
 <li class="nav-item dropdown">
   <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false" aria-haspopup="true" id="dropdown-reference">Reference</a>
   <div class="dropdown-menu" aria-labelledby="dropdown-reference">
-    <a class="dropdown-item" href="../reference/index.html">R functions</a>
+    <a class="dropdown-item" href="../reference/index.html">R functions and data</a>
     <a class="dropdown-item" href="../articles/stata-help.html">Stata help file</a>
   </div>
 </li>
@@ -151,6 +152,14 @@ diagnostics.</p>
 </tr></thead>
 <tbody>
 <tr class="odd">
+<td>The example data</td>
+<td><code>data("firms")</code></td>
+<td>
+<code>net get bootmakr, from(...)</code>, then
+<code>use firms</code>
+</td>
+</tr>
+<tr class="even">
 <td>Model</td>
 <td>
 <code>formula = y ~ d + x1 + x2</code>, <code>data = dat</code>
@@ -158,29 +167,29 @@ diagnostics.</p>
 <td>
 <code>y d x1 x2</code> (outcome first)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Treatment</td>
 <td><code>treat = "d"</code></td>
 <td><code>treat(d)</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Benchmark covariate</td>
 <td><code>benchmark_covariates = "x1"</code></td>
 <td><code>benchmark(x1)</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Group of covariates as benchmark</td>
 <td><code>gbenchmark_covariates = c("x1", "x2")</code></td>
 <td><code>gbenchmark(x1 x2)</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Strength relative to the benchmark, treatment side</td>
 <td>
 <code>kd = 1</code> (default)</td>
 <td>
 <code>kd(1)</code> (default)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Strength relative to the benchmark, outcome side</td>
 <td>
 <code>ky</code>; defaults to <code>kd</code>
@@ -189,19 +198,19 @@ diagnostics.</p>
 <code>ky()</code>; defaults to <code>kd()</code>
 </td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Several strengths at once</td>
 <td><code>kd = c(0.5, 1, 2)</code></td>
 <td><code>kd(0.5 1 2)</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Categorical covariates</td>
 <td>
 <code>factor(year)</code> in the formula</td>
 <td>
 <code>i.year</code> in the variable list</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Subsample</td>
 <td>subset <code>data</code>
 </td>
@@ -209,14 +218,14 @@ diagnostics.</p>
 <code>if</code> and <code>in</code>
 </td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Regression weights</td>
 <td>
 <code>weights = "w"</code> or a vector</td>
 <td>not available (<code>sensemakr</code> for Stata does not accept
 weights)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Omitted-variable strength set by hand</td>
 <td>
 <code>r2dz.x</code>, <code>r2yz.dx</code>
@@ -326,8 +335,9 @@ weights)</td>
 </td>
 <td>printed; <code>r(estimate)</code>, <code>r(se)</code>,
 <code>r(ci_lower)</code>, <code>r(ci_upper)</code>, <code>r(p)</code>;
-<code>r(results)</code> with several <code>kd()</code>
-</td>
+<code>r(results)</code> with several <code>kd()</code> (its last column,
+<code>N_ok</code>, counts the successful replications behind each
+row)</td>
 </tr>
 <tr class="even">
 <td>Benchmark strength</td>
@@ -339,11 +349,22 @@ weights)</td>
 </td>
 </tr>
 <tr class="odd">
+<td>Impact of the omitted variable (ITCV scale)</td>
+<td>in the block; <code>out$results$impact</code>,
+<code>out$benchmark_strength$implied$impact</code>,
+<code>$r_yd.x</code>
+</td>
+<td>in the block; <code>r(impact)</code>, <code>r(r_yd_x)</code>,
+columns <code>r_yz_x</code> and <code>impact</code> of
+<code>r(benchmark_strength)</code>
+</td>
+</tr>
+<tr class="even">
 <td>Bootstrap draws</td>
 <td><code>out$boot_samples</code></td>
 <td><code>saving(filename)</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Replications completed and failed</td>
 <td>
 <code>out$N_successful</code>, <code>out$N_fail</code>; note below
@@ -351,18 +372,18 @@ the table</td>
 <td>
 <code>r(N_successful)</code>; warning below the table</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Plot of the kd sweep</td>
 <td><code>plot(out, type = "kd_sweep")</code></td>
 <td>
 <code>plot</code> option</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Histogram of the bootstrap distribution</td>
 <td><code>plot(out, type = "histogram")</code></td>
 <td>top panel of the <code>converge()</code> graph</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Convergence check</td>
 <td>
 <code>converge = list(minreps = 1000, stepsize = 1000, threshold = 10000)</code>,
@@ -370,7 +391,7 @@ then <code>plot(out, type = "convergence")</code>
 </td>
 <td><code>converge(minreps(1000) stepsize(1000) threshold(10000))</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Convergence statistics</td>
 <td><code>out$convergence</code></td>
 <td>
@@ -378,7 +399,7 @@ then <code>plot(out, type = "convergence")</code>
 <code>savedata()</code> inside <code>converge()</code>
 </td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>The underlying <code>sensemakr</code> result</td>
 <td><code>out$sensemakr_orig</code></td>
 <td>run <code>sensemakr</code> with the same variables and options</td>
@@ -405,7 +426,9 @@ Stata</a>.</p>
 <code>bound_label()</code> and <code>reduce</code> are handed to
 <code>sensemakr</code> unchanged. The version on SSC at the time of
 writing does not accept them, so they stop with an error. The help file
-says so.</p>
+says so. In particular, a strength of the omitted variable given by hand
+(<code>r2dz.x</code>, <code>r2yz.dx</code> in R) has no working Stata
+counterpart.</p>
 <p><strong>Row labels differ.</strong> With several values of
 <code>kd</code>, R labels the rows <code>d (kd=0.5)</code> and Stata
 <code>d_.5</code>.</p>

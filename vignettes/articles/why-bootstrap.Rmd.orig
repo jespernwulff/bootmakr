@@ -1,0 +1,371 @@
+---
+title: "Why bootstrap?"
+description: >
+  The impact threshold of a confounding variable (ITCV) and the analytic
+  confidence interval of sensemakr break down when the regression calls for
+  robust standard errors. The argument of Lonati and Wulff (2026), shown on
+  the package's simulated data, and what the bootstrap does instead.
+---
+
+```{r helpers, include = FALSE}
+source(file.path(getOption("bootmakr.precompute.dir"), "helpers.R"))
+st <- stata_results("why-bootstrap")
+```
+
+Sensitivity analysis asks how strong an omitted variable would have to be
+to change a regression result. The most common answer in management
+research is the impact threshold of a confounding variable (ITCV; Frank,
+2000): the smallest product of correlations with the predictor and with the
+outcome that an omitted variable needs to make a significant coefficient
+insignificant. `sensemakr` (Cinelli & Hazlett, 2020) answers differently: it
+reports the coefficient you would have obtained had a variable as strong as
+an observed covariate been omitted, with a confidence interval.
+
+Lonati and Wulff (2026) show that both answers rest on the conventional OLS
+variance formula. The ITCV is computed from a *t* statistic, and its reading
+as a product of correlations holds only when that *t* statistic is the
+conventional one. The confidence interval of `sensemakr` is derived under the
+same assumption. As soon as the regression calls for heteroskedasticity- or
+cluster-robust standard errors, which is the rule rather than the exception
+in organizational research, the ITCV remains computable but is no longer a
+product of correlations, and the analytic interval is wrong by the same
+factor as the conventional standard error. The remedy is to bootstrap
+`sensemakr`, as Cinelli, Ferwerda and Hazlett (2024, Appendix C) propose;
+`bootmakr` automates it.
+
+This page shows the problem and the remedy on the package's simulated data,
+in R and in Stata.
+
+## The example
+
+`firms` is a simulated panel of 250 firms observed for 20 years. The true
+effect of `x` on `y` is 0.25. Two firm-level characteristics drive both `x`
+and `y`: an observed control `c` and a variable `q` that we leave out of the
+regression, as a researcher who does not have it would. The within-firm
+components of `x` and of the disturbance are persistent, so standard errors
+must be clustered by firm. Because the data are simulated, `q` is in the
+file and every verdict can be checked.
+
+## One coefficient, two standard errors
+
+Estimate the regression that omits `q`, once with conventional and once with
+cluster-robust standard errors.
+
+`r tabs_r("se")`
+
+```{r se}
+library(bootmakr)
+library(sandwich)
+data("firms")
+
+fit <- lm(y ~ x + c, data = firms)
+
+se <- c(conventional = sqrt(vcov(fit)["x", "x"]),
+        clustered    = sqrt(vcovCL(fit, cluster = ~ firm)["x", "x"]))
+round(c(estimate = coef(fit)[["x"]], se, ratio = se[["clustered"]] / se[["conventional"]]), 3)
+```
+
+`r tabs_stata("se")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("why-bootstrap", "data", output = FALSE)
+stata_show("why-bootstrap", "ses")
+```
+
+`r tabs_end()`
+
+```{r se-numbers, include = FALSE}
+b0 <- coef(fit)[["x"]]
+ratio <- se[["clustered"]] / se[["conventional"]]
+```
+
+The coefficient is `r num(b0)`, well above the true 0.25, because `q` is
+omitted. The clustered standard error is `r num(ratio, 1)` times the
+conventional one. Nothing about the coefficient changed; only the
+uncertainty attached to it did.
+
+## What the ITCV makes of it
+
+The ITCV turns the *t* statistic of the coefficient into a *t*-implied
+correlation, *t* / √(*t*² + df), does the same for the critical *t*, and
+reports the gap between the two, rescaled so that it reads as the product of
+correlations an omitted variable would need to close it. Here it is for both
+*t* statistics. (The code implements the definition directly; the `konfound`
+packages for R and Stata give the same numbers.)
+
+`r tabs_r("itcv")`
+
+```{r itcv}
+t.conv <- coef(fit)[["x"]] / se[["conventional"]]
+t.clus <- coef(fit)[["x"]] / se[["clustered"]]
+df <- fit$df.residual
+
+itcv <- function(t, df) {
+  r.implied  <- t / sqrt(t^2 + df)             # the t-implied correlation
+  t.crit     <- qt(0.975, df)
+  r.critical <- t.crit / sqrt(t.crit^2 + df)
+  c(r_implied = r.implied, ITCV = (r.implied - r.critical) / (1 - abs(r.critical)))
+}
+round(rbind(conventional = itcv(t.conv, df), clustered = itcv(t.clus, df)), 3)
+```
+
+`r tabs_stata("itcv")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("why-bootstrap", "itcv")
+```
+
+`r tabs_end()`
+
+```{r itcv-numbers, include = FALSE}
+it.conv <- itcv(t.conv, df)
+it.clus <- itcv(t.clus, df)
+```
+
+With conventional standard errors the ITCV is
+`r num(it.conv[["ITCV"]], 2, lead = FALSE)`; with clustered ones it drops to
+`r num(it.clus[["ITCV"]], 2, lead = FALSE)`. Read as a product of
+correlations, the second number says that an omitted variable correlated
+about `r num(sqrt(it.clus[["ITCV"]]), 2, lead = FALSE)` with both `x` and `y`
+(the square root of the ITCV) would be enough to overturn the result. Now
+look at `q`, whose correlations we know. The ITCV is stated in correlations
+given the other covariates, so we take `q`'s partial correlations given `c`.
+
+`r tabs_r("impact")`
+
+```{r impact}
+partial <- function(a, b) {
+  cor(resid(lm(firms[[a]] ~ firms$c)), resid(lm(firms[[b]] ~ firms$c)))
+}
+round(c(q_with_x = partial("q", "x"), q_with_y = partial("q", "y"),
+        impact = partial("q", "x") * partial("q", "y"),
+        x_with_y = partial("x", "y")), 3)
+```
+
+`r tabs_stata("impact")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("why-bootstrap", "impact")
+```
+
+`r tabs_end()`
+
+```{r impact-numbers, include = FALSE}
+r.xq <- partial("q", "x"); r.yq <- partial("q", "y"); r.xy <- partial("x", "y")
+impact.q <- r.xq * r.yq
+if (!(it.clus[["ITCV"]] < impact.q && impact.q < it.conv[["ITCV"]]) && !.pending())
+  stop("The example no longer has ITCV_clustered < impact(q) < ITCV_conventional: revise the text.")
+```
+
+The impact of `q` is `r num(impact.q, 2, lead = FALSE)`. That is below the
+conventional ITCV (`r num(it.conv[["ITCV"]], 2, lead = FALSE)`), so the
+conventional ITCV says that `q` is *not* strong enough to overturn the
+result. It is above the clustered ITCV
+(`r num(it.clus[["ITCV"]], 2, lead = FALSE)`), so the clustered ITCV says
+that `q` *is* strong enough. One of them must be wrong, and we can find out
+which: put `q` into the regression.
+
+`r tabs_r("withq")`
+
+```{r withq}
+fit.q <- lm(y ~ x + c + q, data = firms)
+round(c(estimate = coef(fit.q)[["x"]],
+        se_conventional = sqrt(vcov(fit.q)["x", "x"]),
+        se_clustered    = sqrt(vcovCL(fit.q, cluster = ~ firm)["x", "x"])), 3)
+```
+
+`r tabs_stata("withq")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("why-bootstrap", "withq")
+```
+
+`r tabs_end()`
+
+```{r withq-numbers, include = FALSE}
+bq  <- coef(fit.q)[["x"]]
+seq.cl <- sqrt(vcovCL(fit.q, cluster = ~ firm)["x", "x"])
+seq.cv <- sqrt(vcov(fit.q)["x", "x"])
+if (abs(bq / seq.cl) < 1.96 && !.pending()) stop("The with-q coefficient is no longer significant: revise the text.")
+```
+
+With `q` in the model the coefficient of `x` is `r num(bq)`, close to the
+true 0.25, with a clustered standard error of `r num(seq.cl, 3)`: it remains
+clearly different from zero. The clustered ITCV was wrong. Its reading as a
+product of correlations fails because the *t*-implied correlation it is
+built on, `r num(it.clus[["r_implied"]], 2, lead = FALSE)`, is not the
+correlation between `x` and `y` given `c`, which is
+`r num(r.xy, 2, lead = FALSE)`. With conventional standard errors the two
+coincide (`r num(it.conv[["r_implied"]], 2, lead = FALSE)`); that
+coincidence is what the ITCV derivation uses. With robust standard errors
+the *t*-implied correlation equals the actual correlation divided by
+√(ratio² (1 − *r*²) + *r*²), where ratio is the robust standard error over
+the conventional one (Lonati & Wulff, 2026, Equation 4). When robust standard
+errors are larger than conventional ones, the usual case, the ITCV
+overstates the threat from omitted variables; when they are smaller, it
+understates it. There is no "correct ITCV" to be had under robust inference:
+two omitted variables with the same correlations can change a robust
+standard error in different ways, so no product of correlations corresponds
+to the robust *t* statistic. Degrees-of-freedom corrections, fixed effects
+and feasible generalized least squares do not repair this; the paper goes
+through each of them.
+
+## Analytic sensemakr has the same problem
+
+`sensemakr` does not need the ITCV. For an omitted variable as strong as
+`c`, it computes the bias-adjusted coefficient directly, and that estimate
+is a function of the data alone. But the standard error and confidence
+interval it attaches to the adjusted coefficient are derived under
+conventional OLS inference (Cinelli & Hazlett, 2020, Section 4.3).
+
+`r tabs_r("analytic")`
+
+```{r analytic}
+sensemakr::ovb_bounds(fit, treatment = "x", benchmark_covariates = "c", kd = 1)[
+  , c("bound_label", "adjusted_estimate", "adjusted_se", "adjusted_lower_CI", "adjusted_upper_CI")]
+```
+
+`r tabs_stata("analytic")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("why-bootstrap", "analytic")
+```
+
+`r tabs_end()`
+
+```{r analytic-numbers, include = FALSE}
+an <- sensemakr::ovb_bounds(fit, treatment = "x", benchmark_covariates = "c", kd = 1)
+```
+
+The adjusted estimate, `r num(an$adjusted_estimate, 3)`, is close to the
+coefficient with `q` in the model. Its analytic standard error,
+`r num(an$adjusted_se, 3)`, is close to the *conventional* standard error of
+that coefficient (`r num(seq.cv, 3)`) and far below the clustered one
+(`r num(seq.cl, 3)`). The analytic interval, from
+`r num(an$adjusted_lower_CI, 3)` to `r num(an$adjusted_upper_CI, 3)`, is
+therefore about `r num(seq.cl / an$adjusted_se, 1)` times too narrow in
+these data, for exactly the reason the ITCV fails: a formula built on the
+conventional variance is being applied to a regression that needs a robust
+one.
+
+## What the bootstrap does
+
+Cinelli, Ferwerda and Hazlett (2024, Appendix C) propose to replace the
+analytic interval by a bootstrap: resample the data the way you would choose
+standard errors (observations for heteroskedasticity, whole clusters for
+clustered data), refit the regression and recompute the adjusted estimate in
+every replication, and take the percentiles of the resulting distribution as
+the confidence interval. `bootmakr` does this in one call.
+
+`r tabs_r("boot")`
+
+```{r boot, cache = TRUE}
+boot <- bootmakr(y ~ x + c, data = firms, treat = "x",
+                 benchmark_covariates = "c", cluster = "firm",
+                 seed = 123, progress = FALSE)
+boot
+```
+
+`r tabs_stata("boot")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("why-bootstrap", "bootmakr")
+```
+
+`r tabs_end()`
+
+```{r boot-numbers, include = FALSE}
+rb <- boot$results
+sb <- st[st$label == "bootmakr", ]
+```
+
+The adjusted estimate is the same as before. Its bootstrap standard error is
+`r num(rb$se, 3)` (`r num(sb$se, 3)` in Stata, which draws different random
+numbers), and the percentile interval runs from `r num(rb$ci_lower)` to
+`r num(rb$ci_upper)`. The interval is wider than the clustered interval of
+the regression that includes `q`, for two reasons. One is the reason this
+page is about: the bootstrap, resampling firms, reflects the clustered
+uncertainty of the coefficient, not the conventional one. The other is that
+in every replication the strength of the benchmark `c` is re-estimated too,
+so the interval also carries the uncertainty about how strong "as strong as
+`c`" is. The paper's own example (Table 2 of Lonati & Wulff, 2026) separates
+the two by giving `sensemakr` the omitted variable's strength directly,
+which the R package allows:
+
+```{r manual, cache = TRUE}
+manual <- bootmakr(y ~ x + c, data = firms, treat = "x",
+                   r2dz.x  = partial("q", "x")^2,
+                   r2yz.dx = sensemakr::partial_r2(fit.q, covariates = "q"),
+                   cluster = "firm", seed = 123, progress = FALSE)
+manual$results[, c("estimate", "se", "ci_lower", "ci_upper", "pvalue")]
+```
+
+```{r manual-numbers, include = FALSE}
+rm <- manual$results
+```
+
+With `q`'s actual strength, the bootstrap standard error is
+`r num(rm$se, 3)`, next to the clustered standard error of `r num(seq.cl, 3)`
+that the regression with `q` gives: the bootstrap recovers the inference
+that would have been obtained had `q` been observed, as it does in the
+paper. (The `sensemakr` command on SSC does not accept a strength given by
+hand, so this step has no Stata counterpart.)
+
+The resampling scheme is what makes the bootstrap robust, and it is your
+choice. Resampling observations instead of firms gives
+
+`r tabs_r("rows")`
+
+```{r rows, cache = TRUE}
+rows <- bootmakr(y ~ x + c, data = firms, treat = "x",
+                 benchmark_covariates = "c",
+                 seed = 123, progress = FALSE)
+rows$results[, c("estimate", "se", "ci_lower", "ci_upper")]
+```
+
+`r tabs_stata("rows")`
+
+```{r, echo = FALSE, results = "asis"}
+stata_show("why-bootstrap", "rows")
+```
+
+`r tabs_end()`
+
+```{r rows-numbers, include = FALSE}
+rr <- rows$results
+```
+
+a standard error of `r num(rr$se, 3)`, too small by the same factor as the
+conventional standard error, because observations of the same firm are
+treated as independent. Resample the units you would cluster on; see
+[Clustered and stratified data](clustering.html).
+
+## In the paper
+
+Lonati and Wulff (2026) make this argument formally, illustrate it with a
+simulated example like the one above (without `c`, and with a stronger `q`),
+and test bootstrap-based `sensemakr` against the ITCV in a Monte Carlo study
+with heteroskedastic, clustered, unbalanced and weak-benchmark designs. The
+bootstrap interval comes close to nominal coverage throughout, while the
+ITCV's mistakes grow with the sample size under clustering. The paper ends
+with a four-stage workflow (which standard errors, how different are they,
+how strong is a plausible omitted variable, can the bootstrap be trusted)
+that the [worked example](ceo-pay.html) follows on a published study.
+
+## References
+
+Cinelli, C., & Hazlett, C. (2020). Making sense of sensitivity: Extending
+omitted variable bias. *Journal of the Royal Statistical Society: Series B*,
+82(1), 39--67. <https://doi.org/10.1111/rssb.12348>
+
+Cinelli, C., Ferwerda, J., & Hazlett, C. (2024). sensemakr: Sensitivity
+analysis tools for OLS in R and Stata. *Observational Studies*, 10(2),
+93--127. <https://doi.org/10.1353/obs.2024.a946583>
+
+Frank, K. A. (2000). Impact of a confounding variable on a regression
+coefficient. *Sociological Methods & Research*, 29(2), 147--194.
+<https://doi.org/10.1177/0049124100029002001>
+
+Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
+robust standard errors (and what to do instead). *Academy of Management
+Proceedings*, 2026(1). <https://doi.org/10.5465/AMPROC.2026.247bp>

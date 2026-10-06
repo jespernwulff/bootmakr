@@ -10,10 +10,13 @@ source(file.path(getOption("bootmakr.precompute.dir"), "helpers.R"))
 ```
 
 `bootmakr` obtains its standard errors, confidence intervals and *p*-values
-by resampling the data. What it resamples is your decision, and it should
-follow one rule: **resample the units that you would treat as independent
-when choosing standard errors for the regression itself.** If you would
-cluster the standard errors by firm, resample firms.
+by resampling the data, because the analytic alternatives, the ITCV and the
+confidence interval of `sensemakr`, rest on the conventional OLS variance
+and break down when the regression calls for robust standard errors (see
+[Why bootstrap?](why-bootstrap.html)). What it resamples is your decision,
+and it should follow one rule: **resample the units that you would treat as
+independent when choosing standard errors for the regression itself.** If
+you would cluster the standard errors by firm, resample firms.
 
 | Your regression would use | Resample | R | Stata |
 |---|---|---|---|
@@ -195,6 +198,6 @@ Chen, G., Chittoor, R., & Vissa, B. (2021). Does nepotism run in the family?
 CEO pay and pay-performance sensitivity in Indian family firms. *Strategic
 Management Journal*, 42(7), 1326--1343. <https://doi.org/10.1002/smj.3263>
 
-Lonati, S., & Wulff, J. N. (2026). *Why you should not use the ITCV with
-robust standard errors (and what to do instead)*. SSRN working paper.
-<https://ssrn.com/abstract=6789678>
+Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
+robust standard errors (and what to do instead). *Academy of Management
+Proceedings*, 2026(1). <https://doi.org/10.5465/AMPROC.2026.247bp>
