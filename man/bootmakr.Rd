@@ -251,6 +251,14 @@ strength. It is not a statement about the robust standard error that the
 regression including the omitted variable would have had. The three
 numbers are stored in \code{$robustness}.
 
+The breakdown kd and the bootstrap robustness value are set by the tail of the
+bootstrap distribution: with \code{alpha = 0.05}, by the 2.5 percent of
+replicates closest to zero. They therefore need more replications than a
+standard error does. Use 1,000 or more, and expect them still to differ by a
+few percent from one seed to the next. The sign convention described for the
+robustness value applies to the breakdown kd as well, so with a weak effect
+the bootstrap value can exceed the conventional one for that reason alone.
+
 The bootstrap procedure follows Cinelli, Ferwerda and Hazlett (2024,
 Appendix C); Lonati and Wulff (2026) show why it is needed when the
 regression calls for robust standard errors.

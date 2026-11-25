@@ -39,6 +39,12 @@ This version lives on the `experimental` branch. The released package on
   omitted variable pulls the coefficient of each replicate towards zero
   whatever its sign there, which raises the bootstrap value when many
   replicates have the opposite sign (a weak effect).
+* The breakdown kd and the bootstrap robustness value are set by the tail
+  of the bootstrap distribution, so they need 1,000 or more replications
+  and still differ by a few percent between seeds. In both, the adjustment
+  follows the sign of each replicate's coefficient, as in the table, which
+  can lift the bootstrap value above the conventional one when the effect
+  is weak.
 * New element `$boot_base`: the unadjusted treatment coefficient and its
   scale (standard error times the square root of the residual degrees of
   freedom) in every replicate. The adjusted estimate at any strength of the
