@@ -125,6 +125,16 @@ covariates, used in that recursion).}
 \item{\code{boot_samples}}{matrix of bootstrap draws of the adjusted
 estimate, one column per \code{kd} (a list of three such matrices
 with two-way clustering).}
+\item{\code{breakdown}}{list with the breakdown kd of the benchmark the table
+refers to: \code{kd} (bootstrap), \code{kd_conventional} (conventional
+standard error), \code{kd_limit} (the largest kd the benchmark allows in the
+original fit), \code{benchmark}, \code{n_used} and \code{n_reps} (replicates
+with a bound at the reported value, and replicates with a benchmark at all),
+and a \code{note} where one applies.}
+\item{\code{boot_bench}}{matrix with the partial R2 of that benchmark with the
+treatment (\code{r2dxj.x}) and with the outcome (\code{r2yxj.dx}) in every
+replicate (a list of three such matrices with two-way clustering); \code{NA}
+without a benchmark.}
 \item{\code{robustness}}{list with the robustness values of the
 treatment coefficient: \code{rv_q} and \code{rv_qa} from
 \code{sensemakr} (the latter at \code{alpha}, with the
@@ -189,6 +199,29 @@ estimate away from zero (towards zero when \code{reduce = FALSE}). All of
 these are functions of the data alone. No standard error enters them, so
 they do not depend on the variance estimator, and none of them is a
 threshold. They are stored in \code{$benchmark_strength}.
+
+The print method then reports the \strong{breakdown kd}: the smallest
+\code{kd}, with \code{ky = kd}, at which the estimate is no longer significant
+at \code{alpha}, for the benchmark the table of adjusted estimates refers to.
+Two numbers are given. The first is judged by the confidence interval that
+\code{sensemakr::ovb_bounds()} reports, which rests on the conventional OLS
+standard error. The second is judged by the bootstrap test of the table:
+running \code{bootmakr()} with the same \code{seed} and a \code{kd} marginally
+below that value returns a p-value below \code{alpha}, and marginally above it
+a p-value of at least \code{alpha}. It is computed without refitting, from the
+coefficient, its scale and the benchmark's two partial R2 in every replicate
+(\code{$boot_base} and \code{$boot_bench}), and it does not depend on the
+\code{kd} of the call. sensemakr's bound exists only up to a largest
+\code{kd}, at which the implied partial R2 of the omitted variable with the
+treatment reaches one. That limit is printed. It differs between replicates,
+and a replicate beyond its own limit is left out, as it is in the table; a
+note says how many are left out at the reported value. A benchmark that is
+strongly related to the treatment has a low limit, and close to the limit the
+bias grows without bound, so a breakdown kd near the limit reflects the limit
+more than the estimate. With \code{weights} both numbers use the weighted
+partial R2 of the benchmark. The breakdown kd is available for \code{reduce =
+TRUE} and when the table reports a benchmark rather than a manual R2. It is
+stored in \code{$breakdown}.
 
 The print method also reports the \strong{robustness value} of the
 treatment coefficient, which needs no benchmark: the strength an omitted

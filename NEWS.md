@@ -3,6 +3,22 @@
 This version lives on the `experimental` branch. The released package on
 `master` is 0.4.0 and is not changed while the paper is under review.
 
+* New: the **breakdown kd**. After the benchmark-strength block `print()`
+  reports the smallest `kd` (with `ky = kd`) at which the estimate is no
+  longer significant at `alpha`, for the benchmark the table refers to:
+  once judged by `sensemakr`'s interval with the conventional standard
+  error, and once by the bootstrap test of the table. Running `bootmakr()`
+  again with the same seed and a `kd` marginally below the bootstrap value
+  gives a p-value below `alpha`, marginally above it a p-value of at least
+  `alpha`. It is exact for the replicates drawn and needs no extra model
+  fits or a `kd` sweep: the benchmark's two partial R² are now stored for
+  every replicate (`$boot_bench`), and `sensemakr`'s bound and adjusted
+  estimate are closed forms in them. The largest `kd` the benchmark allows
+  is printed too. Replicates beyond their own limit are left out, as in the
+  table, and a note says how many; near the limit the bias grows without
+  bound, so a breakdown kd close to it reflects the limit more than the
+  estimate. Available for `reduce = TRUE` and for all resampling schemes;
+  stored in `$breakdown`.
 * New: a **bootstrap robustness value**. `print()` now ends with the
   robustness values of the treatment coefficient, and they are stored in
   `$robustness`: `sensemakr`'s two values (the strength of an omitted

@@ -18,8 +18,8 @@
 \description{
 Prints the table of bias-adjusted estimates with bootstrap standard
 errors, confidence intervals and p-values (one row per \code{kd}),
-followed by the descriptive benchmark-strength block, the robustness
-values and, if requested, the convergence diagnostics.
+followed by the descriptive benchmark-strength block, the breakdown kd,
+the robustness values and, if requested, the convergence diagnostics.
 }
 \seealso{
 \code{\link{bootmakr}}, \code{\link{plot.bootmakr}}

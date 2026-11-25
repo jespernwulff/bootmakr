@@ -39,6 +39,30 @@
 #' they do not depend on the variance estimator, and none of them is a
 #' threshold. They are stored in \code{$benchmark_strength}.
 #'
+#' The print method then reports the \strong{breakdown kd}: the smallest
+#' \code{kd}, with \code{ky = kd}, at which the estimate is no longer
+#' significant at \code{alpha}, for the benchmark the table of adjusted
+#' estimates refers to. Two numbers are given. The first is judged by the
+#' confidence interval that \code{sensemakr::ovb_bounds()} reports, which
+#' rests on the conventional OLS standard error. The second is judged by the
+#' bootstrap test of the table: running \code{bootmakr()} with the same
+#' \code{seed} and a \code{kd} marginally below that value returns a p-value
+#' below \code{alpha}, and marginally above it a p-value of at least
+#' \code{alpha}. It is computed without refitting, from the coefficient, its
+#' scale and the benchmark's two partial R2 in every replicate
+#' (\code{$boot_base} and \code{$boot_bench}), and it does not depend on the
+#' \code{kd} of the call. sensemakr's bound exists only up to a largest
+#' \code{kd}, at which the implied partial R2 of the omitted variable with the
+#' treatment reaches one. That limit is printed. It differs between
+#' replicates, and a replicate beyond its own limit is left out, as it is in
+#' the table; a note says how many are left out at the reported value. A
+#' benchmark that is strongly related to the treatment has a low limit, and
+#' close to the limit the bias grows without bound, so a breakdown kd near the
+#' limit reflects the limit more than the estimate. With \code{weights} both
+#' numbers use the weighted partial R2 of the benchmark. The breakdown kd is
+#' available for \code{reduce = TRUE} and when the table reports a benchmark
+#' rather than a manual R2. It is stored in \code{$breakdown}.
+#'
 #' The print method also reports the \strong{robustness value} of the
 #' treatment coefficient, which needs no benchmark: the strength an omitted
 #' variable must have, as a partial R2 with the treatment and with the
@@ -146,6 +170,17 @@
 #'     \item{\code{boot_samples}}{matrix of bootstrap draws of the adjusted
 #'       estimate, one column per \code{kd} (a list of three such matrices
 #'       with two-way clustering).}
+#'     \item{\code{breakdown}}{list with the breakdown kd of the benchmark
+#'       the table refers to: \code{kd} (bootstrap), \code{kd_conventional}
+#'       (conventional standard error), \code{kd_limit} (the largest kd the
+#'       benchmark allows in the original fit), \code{benchmark},
+#'       \code{n_used} and \code{n_reps} (replicates with a bound at the
+#'       reported value, and replicates with a benchmark at all), and a
+#'       \code{note} where one applies.}
+#'     \item{\code{boot_bench}}{matrix with the partial R2 of that benchmark
+#'       with the treatment (\code{r2dxj.x}) and with the outcome
+#'       (\code{r2yxj.dx}) in every replicate (a list of three such matrices
+#'       with two-way clustering); \code{NA} without a benchmark.}
 #'     \item{\code{robustness}}{list with the robustness values of the
 #'       treatment coefficient: \code{rv_q} and \code{rv_qa} from
 #'       \code{sensemakr} (the latter at \code{alpha}, with the
@@ -322,6 +357,11 @@ bootmakr <- function(formula,
     resample_info <- .setup_resampling(data, single_clust, strata_vec)
   }
 
+  # Which benchmark the table of adjusted estimates refers to (NA if it
+  # reports a manual R2 row or there is no benchmark)
+  bench_idx <- .table_benchmark_index(benchmark_covariates, gbenchmark_covariates,
+                                      r2dz.x, n_kd, bounds_row)
+
   # ---- Bootstrap loop(s) ----
   loop_args <- list(
     reps = reps, data = data, formula = formula, treat = treat,
@@ -331,6 +371,7 @@ bootmakr <- function(formula,
     kd = kd, ky = ky, q = q, alpha = alpha,
     r2dz.x = r2dz.x, r2yz.dx = r2yz.dx,
     bound_label = bound_label, reduce = reduce, bounds_row = bounds_row,
+    bench_idx = bench_idx,
     show_progress = isTRUE(progress)
   )
 
@@ -352,6 +393,7 @@ bootmakr <- function(formula,
 
     boot_samples <- list(G = out_G$boot_mat, H = out_H$boot_mat, GH = out_GH$boot_mat)
     boot_base    <- list(G = out_G$base_mat, H = out_H$base_mat, GH = out_GH$base_mat)
+    boot_bench   <- list(G = out_G$bench_mat, H = out_H$bench_mat, GH = out_GH$bench_mat)
     results      <- .compute_twoway_stats(boot_samples, obs_estimates, kd, alpha)
     n_fail       <- out_G$n_fail + out_H$n_fail + out_GH$n_fail
     n_successful <- min(sum(complete.cases(boot_samples$G)),
@@ -366,6 +408,7 @@ bootmakr <- function(formula,
                    c(list(resample_info = resample_info, label = NULL), loop_args))
     boot_samples <- out$boot_mat
     boot_base    <- out$base_mat
+    boot_bench   <- out$bench_mat
     results      <- .compute_boot_stats(boot_samples, obs_estimates, kd, alpha)
     n_fail       <- out$n_fail
     n_successful <- sum(complete.cases(boot_samples))
@@ -376,6 +419,10 @@ bootmakr <- function(formula,
 
   # ---- Robustness value (does not depend on the benchmark or on kd) ----
   robustness <- .robustness(fit_orig, treat, q, alpha, reduce, boot_base, is_twoway)
+
+  # ---- Breakdown kd: where the bootstrap test stops rejecting ----
+  breakdown <- .breakdown(fit_orig, treat, alpha, reduce, kd, ky, bench_idx,
+                          bench_strength, boot_base, boot_bench, is_twoway)
 
   conv_out <- NULL
   if (conv_opts$do_converge) {
@@ -391,7 +438,9 @@ bootmakr <- function(formula,
       results       = results,
       boot_samples  = boot_samples,
       boot_base     = boot_base,
+      boot_bench    = boot_bench,
       robustness    = robustness,
+      breakdown     = breakdown,
       convergence   = conv_out,
       call          = cl,
       method        = method,
@@ -425,14 +474,19 @@ bootmakr <- function(formula,
 .get_adjusted_estimates <- function(fit, data, formula, treat, weight_vec,
                                     benchmark_covariates, gbenchmark_covariates,
                                     kd, ky, q, alpha, r2dz.x, r2yz.dx,
-                                    bound_label, reduce, bounds_row) {
+                                    bound_label, reduce, bounds_row,
+                                    base = NULL) {
+  # `base`: the benchmark's partial R2s if the caller has already computed
+  # them for this fit with .bench_base() (the bootstrap loop does, to store
+  # them); NULL computes them here.
   n_kd <- length(kd)
 
   if (!is.null(gbenchmark_covariates)) {
     # ---- Grouped benchmark pathway ----
     # 1.-2. Partial R2 of Y with Z_group given D, X (outcome model) and of
     #       D with Z_group given X (treatment model) -- see .group_base_r2()
-    base <- .group_base_r2(fit, data, formula, treat, weight_vec, gbenchmark_covariates)
+    if (is.null(base))
+      base <- .group_base_r2(fit, data, formula, treat, weight_vec, gbenchmark_covariates)
     r2yxj_base <- base$r2yxj.dx
     r2dxj_base <- base$r2dxj.x
 
@@ -488,7 +542,7 @@ bootmakr <- function(formula,
   }
 
   if (!is.null(benchmark_covariates)) {
-    base <- .single_base_r2(fit, treat, benchmark_covariates)
+    if (is.null(base)) base <- .single_base_r2(fit, treat, benchmark_covariates)
     for (j in seq_along(benchmark_covariates)) {
       bnd <- sensemakr::ovb_partial_r2_bound(
         r2dxj.x = base$r2dxj.x[j], r2yxj.dx = base$r2yxj.dx[j],
@@ -891,13 +945,17 @@ utils::globalVariables(".bootmakr_w")
                                 weight_vec, benchmark_covariates,
                                 gbenchmark_covariates, kd, ky, q, alpha,
                                 r2dz.x, r2yz.dx, bound_label, reduce,
-                                bounds_row, show_progress, label = NULL) {
+                                bounds_row, bench_idx = NA_integer_,
+                                show_progress, label = NULL) {
   n_kd     <- length(kd)
   boot_mat <- matrix(NA_real_, nrow = reps, ncol = n_kd)
   colnames(boot_mat) <- paste0("kd_", kd)
   # Unadjusted coefficient and its scale in every replicate; see .coef_scale()
   base_mat <- matrix(NA_real_, nrow = reps, ncol = 2,
                      dimnames = list(NULL, c("estimate", "scale")))
+  # Partial R2s of the benchmark the table refers to, in every replicate
+  bench_mat <- matrix(NA_real_, nrow = reps, ncol = 2,
+                      dimnames = list(NULL, c("r2dxj.x", "r2yxj.dx")))
   n_fail   <- 0L
 
   if (show_progress) {
@@ -922,18 +980,29 @@ utils::globalVariables(".bootmakr_w")
     if (!is.null(fit_b)) {
       base_mat[b, ] <- tryCatch(.coef_scale(fit_b, treat),
                                 error = function(e) c(NA_real_, NA_real_))
+      # The benchmark's partial R2s are computed once here and handed on, so
+      # that they are kept even when the bound at the requested kd fails.
+      bench_b <- tryCatch(
+        .bench_base(fit_b, d_boot, formula, treat, weight_vec[boot_idx],
+                    benchmark_covariates, gbenchmark_covariates),
+        error = function(e) NULL)
+      if (!is.null(bench_b) && !is.na(bench_idx) &&
+          bench_idx >= 1L && bench_idx <= length(bench_b$r2dxj.x))
+        bench_mat[b, ] <- c(bench_b$r2dxj.x[bench_idx], bench_b$r2yxj.dx[bench_idx])
       boot_mat[b, ] <- tryCatch(
         .get_adjusted_estimates(
           fit_b, d_boot, formula, treat, weight_vec[boot_idx],
           benchmark_covariates, gbenchmark_covariates,
-          kd, ky, q, alpha, r2dz.x, r2yz.dx, bound_label, reduce, bounds_row
+          kd, ky, q, alpha, r2dz.x, r2yz.dx, bound_label, reduce, bounds_row,
+          base = bench_b
         ), error = function(e) rep(NA_real_, n_kd))
     }
     if (any(!is.finite(boot_mat[b, ]))) n_fail <- n_fail + 1L
   }
   if (show_progress) { close(pb); cat("\n") }
 
-  list(boot_mat = boot_mat, base_mat = base_mat, n_fail = n_fail)
+  list(boot_mat = boot_mat, base_mat = base_mat, bench_mat = bench_mat,
+       n_fail = n_fail)
 }
 
 .compute_boot_stats <- function(boot_mat, obs_estimates, kd, alpha) {
@@ -1083,6 +1152,279 @@ utils::globalVariables(".bootmakr_w")
     boot_vals = vGH_clean, obs_estimate = obs_estimate, opts = opts,
     twoway = TRUE
   )
+}
+
+
+# ==============================================================================
+# Breakdown kd
+# ==============================================================================
+# The smallest kd (with ky = kd) at which the bootstrap test of the adjusted
+# estimate stops rejecting. sensemakr's bound on the omitted variable is a
+# closed form in kd and the benchmark's two partial R2s, and the adjusted
+# estimate a closed form in that bound, the coefficient and its scale. With
+# these four numbers stored for every replicate, the adjusted estimate of
+# every replicate can be evaluated at any kd without refitting.
+
+#' Partial R2s of the benchmark(s) for one fit: the group if
+#' gbenchmark_covariates is given, otherwise one entry per benchmark
+#' covariate; NULL without a benchmark.
+#' @noRd
+.bench_base <- function(fit, data, formula, treat, weight_vec,
+                        benchmark_covariates, gbenchmark_covariates) {
+  if (!is.null(gbenchmark_covariates))
+    return(.group_base_r2(fit, data, formula, treat, weight_vec, gbenchmark_covariates))
+  if (!is.null(benchmark_covariates))
+    return(.single_base_r2(fit, treat, benchmark_covariates))
+  NULL
+}
+
+#' Index of the benchmark that the table of adjusted estimates refers to.
+#' The rows of sensemakr's bounds table are: manual bound(s) first, then the
+#' benchmarks, kd varying within benchmark; the table takes the first n_kd
+#' rows of it, or row `bounds_row` when there is a single kd. NA when the
+#' table reports a manual row or there is no benchmark.
+#' @noRd
+.table_benchmark_index <- function(benchmark_covariates, gbenchmark_covariates,
+                                   r2dz.x, n_kd, bounds_row) {
+  if (!is.null(gbenchmark_covariates)) return(1L)
+  if (is.null(benchmark_covariates))   return(NA_integer_)
+  n_man <- length(r2dz.x)
+  if (n_kd > 1) return(if (n_man == 0) 1L else NA_integer_)
+  j <- as.integer(bounds_row) - n_man
+  if (is.na(j) || j < 1L || j > length(benchmark_covariates)) NA_integer_ else j
+}
+
+#' Largest kd the benchmark allows: sensemakr's bound on r2dz.x reaches one,
+#' and the bound stops with an error, at kd = (1 - r2dxj.x) / r2dxj.x.
+#' @noRd
+.kd_limit <- function(r2d) ifelse(r2d > 0, (1 - r2d) / r2d, Inf)
+
+#' sensemakr's ovb_partial_r2_bound() with ky = kd, vectorised over
+#' benchmarks (replicates) and/or kd. NA where sensemakr stops with an error
+#' (kd at or beyond the limit); r2yz.dx is capped at one, as sensemakr does.
+#' @noRd
+.bound_at <- function(r2d, r2y, k) {
+  ok   <- is.finite(r2d) & is.finite(r2y) & r2d >= 0 & r2d < 1 & r2y >= 0 & r2y <= 1 &
+    k >= 0 & k < .kd_limit(r2d)
+  r2d  <- ifelse(ok, r2d, NA_real_)
+  r2dz <- k * r2d / (1 - r2d)
+  r2zx <- k * r2d^2 / ((1 - k * r2d) * (1 - r2d))
+  bad  <- !is.na(r2dz) & (r2dz >= 1 | r2zx >= 1 | r2zx < 0)
+  r2dz[bad] <- NA_real_; r2zx[bad] <- NA_real_
+  r2yz <- pmin(((sqrt(k) + sqrt(r2zx)) / sqrt(1 - r2zx))^2 * (r2y / (1 - r2y)), 1)
+  list(r2dz.x = r2dz, r2yz.dx = r2yz)
+}
+
+#' Adjusted estimate (reduce = TRUE) for an omitted variable k times as
+#' strong as the benchmark; NA where the bound does not exist.
+#' @noRd
+.adj_kd <- function(est, scale, r2d, r2y, k) {
+  b <- .bound_at(r2d, r2y, k)
+  sign(est) * (abs(est) - scale * sqrt(b$r2yz.dx * b$r2dz.x / (1 - b$r2dz.x)))
+}
+
+#' kd at which each adjusted estimate reaches zero, by bisection. The bias
+#' increases in kd and is unbounded at the limit, so there is one crossing
+#' below the limit; the upper end of the final bracket is returned, where the
+#' adjusted estimate is at or just beyond zero. Inf if the bias is zero
+#' throughout (benchmark unrelated to treatment or outcome).
+#' @noRd
+.kd_zero <- function(est, scale, r2d, r2y) {
+  lim <- .kd_limit(r2d)
+  lo  <- rep(0, length(est))
+  hi  <- ifelse(is.finite(lim), lim * (1 - 1e-12), NA_real_)
+  g   <- function(k) abs(est) - scale * sqrt({
+    b <- .bound_at(r2d, r2y, k); b$r2yz.dx * b$r2dz.x / (1 - b$r2dz.x) })
+  never <- is.na(hi) | !is.finite(g(hi)) | g(hi) > 0
+  hi[never] <- 0
+  for (i in seq_len(200)) {
+    mid  <- (lo + hi) / 2
+    done <- mid <= lo | mid >= hi
+    if (all(done | never)) break
+    neg  <- g(mid) <= 0
+    hi   <- ifelse(!done & neg, mid, hi)
+    lo   <- ifelse(!done & !neg, mid, lo)
+  }
+  hi[never] <- Inf
+  hi
+}
+
+#' Breakdown kd, percentile case.
+#'
+#' The smallest kd from which the percentile p-value of the table,
+#' 2 * min(share <= 0, share >= 0) over the replicates that have a bound at
+#' that kd, is at least alpha. The p-value changes only where a replicate's
+#' adjusted estimate crosses zero or where a replicate reaches its own limit
+#' and drops out, so the search over those points is exact. As in the table,
+#' the adjustment follows the sign of the coefficient in each replicate, and
+#' fewer than 10 usable replicates give no p-value. The search ends at
+#' `k_limit`, the limit of the original fit.
+#' @noRd
+.breakdown_percentile <- function(base, bench, alpha, k_limit) {
+  ok <- is.finite(base[, "estimate"]) & is.finite(base[, "scale"]) & base[, "scale"] > 0 &
+    is.finite(bench[, 1]) & is.finite(bench[, 2]) &
+    bench[, 1] >= 0 & bench[, 1] < 1 & bench[, 2] >= 0 & bench[, 2] <= 1
+  e <- base[ok, "estimate"]; s <- base[ok, "scale"]
+  r2d <- bench[ok, 1]; r2y <- bench[ok, 2]; B <- length(e)
+  out <- list(kd = NA_real_, n_used = NA_integer_, n_reps = B, note = NULL)
+  if (B < 10) { out$note <- "Fewer than 10 usable replicates."; return(out) }
+  if (2 * min(mean(e <= 0), mean(e >= 0)) >= alpha) { out$kd <- 0; out$n_used <- B; return(out) }
+
+  lim   <- .kd_limit(r2d)
+  cross <- pmin(.kd_zero(e, s, r2d, r2y), lim)      # crossing, or dropping out
+  cand  <- sort(unique(c(cross, lim)))
+  cand  <- cand[is.finite(cand) & cand < k_limit]
+  if (length(cand) == 0) {
+    out$note <- "The estimate stays significant for every kd the benchmark allows."
+    return(out)
+  }
+  cnt <- function(x) findInterval(cand, sort(x))    # number of x at or below cand
+  pos <- e > 0; neg <- e < 0; zer <- e == 0
+  n_valid <- B - cnt(lim)
+  n_le0 <- (cnt(cross[pos]) - cnt(lim[pos])) + (sum(neg) - cnt(cross[neg])) + (sum(zer) - cnt(lim[zer]))
+  n_ge0 <- (sum(pos) - cnt(cross[pos])) + (cnt(cross[neg]) - cnt(lim[neg])) + (sum(zer) - cnt(lim[zer]))
+  pval  <- ifelse(n_valid >= 10, 2 * pmin(n_le0 / n_valid, n_ge0 / n_valid), NA_real_)
+  i <- which(is.na(pval) | pval >= alpha)[1]
+  if (is.na(i)) {
+    out$note <- "The estimate stays significant for every kd the benchmark allows."
+  } else if (is.na(pval[i])) {
+    out$note <- "Too few replicates have a bound at the kd where the estimate might stop being significant."
+  } else {
+    out$kd <- cand[i]; out$n_used <- as.integer(n_valid[i])
+  }
+  out
+}
+
+#' First point on [0, upper] at which h() is at or below zero, for a
+#' function that starts above zero: located on a grid, then refined with
+#' uniroot inside the first bracket. NA if h() is missing before that point
+#' or never gets there.
+#' @noRd
+.first_crossing <- function(h, upper, n = 401) {
+  grid <- seq(0, upper, length.out = n)
+  hv   <- vapply(grid, h, numeric(1))
+  i    <- which(is.na(hv) | hv <= 0)[1]
+  if (is.na(i) || is.na(hv[i]) || i == 1) return(if (!is.na(i) && i == 1 && !is.na(hv[1])) 0 else NA_real_)
+  tryCatch(stats::uniroot(h, lower = grid[i - 1], upper = grid[i], tol = 1e-12)$root,
+           error = function(e) NA_real_)
+}
+
+#' Breakdown kd, two-way case: the smallest kd at which
+#' |adjusted estimate| / sqrt(V_G + V_H - V_GH) falls to the normal critical
+#' value, the variances taken over the replicates that have a bound at that
+#' kd (at least 10 in each of the three bootstraps).
+#' @noRd
+.breakdown_twoway <- function(base_list, bench_list, obs, obs_bench, alpha) {
+  out <- list(kd = NA_real_, n_used = NA_integer_, n_reps = NA_integer_, note = NULL)
+  dims <- c("G", "H", "GH")
+  adj  <- function(d, k) .adj_kd(base_list[[d]][, "estimate"], base_list[[d]][, "scale"],
+                                 bench_list[[d]][, 1], bench_list[[d]][, 2], k)
+  out$n_reps <- min(vapply(dims, function(d) sum(is.finite(adj(d, 0))), integer(1)))
+  z_crit <- qnorm(1 - alpha / 2)
+  h <- function(k) {
+    v <- vapply(dims, function(d) {
+      a <- adj(d, k); a <- a[is.finite(a)]
+      if (length(a) < 10) NA_real_ else var(a)
+    }, numeric(1))
+    if (anyNA(v)) return(NA_real_)
+    v2 <- v[["G"]] + v[["H"]] - v[["GH"]]
+    if (!is.finite(v2) || v2 < 0) v2 <- max(v[["G"]], v[["H"]])
+    abs(.adj_kd(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2], k)) / sqrt(v2) - z_crit
+  }
+  # the adjusted estimate of the original fit is zero at its own crossing
+  upper <- .kd_zero(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2])
+  if (!is.finite(upper)) {
+    out$note <- "The estimate stays significant for every kd the benchmark allows."
+    return(out)
+  }
+  out$kd <- .first_crossing(h, upper)
+  if (is.na(out$kd)) {
+    out$note <- "Too few replicates have a bound at the kd where the estimate might stop being significant."
+  } else {
+    out$n_used <- min(vapply(dims, function(d) sum(is.finite(adj(d, out$kd))), integer(1)))
+  }
+  out
+}
+
+#' Breakdown kd under the conventional standard error: the smallest kd at
+#' which the confidence interval that sensemakr::ovb_bounds() reports for
+#' the adjusted estimate (adjusted_se, t critical value with the residual
+#' degrees of freedom) includes zero. The adjusted standard error shrinks as
+#' r2yz.dx grows, so the t-statistic need not be monotone in kd; the first
+#' crossing is taken.
+#' @noRd
+.breakdown_conventional <- function(obs, obs_bench, dof, alpha) {
+  upper <- .kd_zero(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2])
+  if (!is.finite(upper) || !is.finite(dof) || dof < 2) return(NA_real_)
+  t_crit <- stats::qt(1 - alpha / 2, df = dof)
+  h <- function(k) {
+    b  <- .bound_at(obs_bench[1], obs_bench[2], k)
+    se <- sqrt((1 - b$r2yz.dx) / (1 - b$r2dz.x)) * obs[[2]] / sqrt(dof) * sqrt(dof / (dof - 1))
+    a  <- .adj_kd(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2], k)
+    if (!is.finite(se) || se <= 0) return(if (isTRUE(a == 0)) -t_crit else Inf)
+    abs(a) / se - t_crit
+  }
+  .first_crossing(h, upper)
+}
+
+#' Breakdown kd of the benchmark the table refers to
+#' @noRd
+.breakdown <- function(fit, treat, alpha, reduce, kd, ky, bench_idx,
+                       bench_strength, boot_base, boot_bench, is_twoway) {
+  out <- list(kd = NA_real_, kd_conventional = NA_real_, kd_limit = NA_real_,
+              benchmark = NA_character_, alpha = alpha,
+              method = if (is_twoway) "cgm_twoway" else "percentile",
+              n_used = NA_integer_, n_reps = NA_integer_, note = NULL)
+  obs_tab <- bench_strength$observed
+  if (is.na(bench_idx) || is.null(obs_tab) || bench_idx > nrow(obs_tab)) {
+    out$note <- "A breakdown kd needs a benchmark, and the table must report it rather than a manual R2."
+    return(out)
+  }
+  out$benchmark <- obs_tab$benchmark[bench_idx]
+  obs_bench <- c(obs_tab$r2dxj.x[bench_idx], obs_tab$r2yxj.dx[bench_idx])
+  out$kd_limit <- unname(.kd_limit(obs_bench[1]))
+  if (!isTRUE(reduce)) {
+    out$note <- "The breakdown kd is defined for reduce = TRUE only."
+    return(out)
+  }
+  obs <- tryCatch(.coef_scale(fit, treat),
+                  error = function(e) c(estimate = NA_real_, scale = NA_real_))
+  if (!all(is.finite(obs)) || !all(is.finite(obs_bench))) {
+    out$note <- "The breakdown kd could not be computed."
+    return(out)
+  }
+  out$kd_conventional <- tryCatch(
+    .breakdown_conventional(obs, obs_bench, fit$df.residual, alpha),
+    error = function(e) NA_real_)
+  res <- tryCatch(
+    if (is_twoway) .breakdown_twoway(boot_base, boot_bench, obs, obs_bench, alpha)
+    else           .breakdown_percentile(boot_base, boot_bench, alpha, out$kd_limit),
+    error = function(e) list(kd = NA_real_, n_used = NA_integer_, n_reps = NA_integer_,
+                             note = "The breakdown kd could not be computed."))
+  out$kd <- res$kd; out$n_used <- res$n_used; out$n_reps <- res$n_reps
+  notes <- res$note
+  if (!isTRUE(all.equal(as.numeric(kd), as.numeric(ky))))
+    notes <- c(notes, "The breakdown kd takes ky = kd; the call uses a different ky.")
+  if (!is.na(out$kd) && !is.na(out$n_used) && out$n_used < out$n_reps)
+    notes <- c(notes, sprintf(
+      "At this kd %d of %d replicates have no bound and are left out, as in the table.",
+      out$n_reps - out$n_used, out$n_reps))
+  out$note <- if (length(notes)) paste(notes, collapse = " ") else NULL
+  out
+}
+
+.print_breakdown <- function(bd) {
+  if (is.null(bd) || is.na(bd$benchmark)) return(invisible(NULL))
+  pct <- format(bd$alpha * 100)
+  f   <- function(v) if (is.na(v)) "    NA" else formatC(v, format = "f", digits = 4)
+  cat(sprintf("\nBreakdown kd (smallest kd at which the estimate is not significant at %s%%;\n", pct),
+      sprintf(" benchmark: %s, ky = kd):\n", bd$benchmark), sep = "")
+  lab <- c("Conventional SE", "Bootstrap")
+  cat(sprintf("  %-*s  %s\n", max(nchar(lab)), lab, c(f(bd$kd_conventional), f(bd$kd))), sep = "")
+  if (is.finite(bd$kd_limit))
+    cat(sprintf("(largest kd this benchmark allows: %s)\n", formatC(bd$kd_limit, format = "f", digits = 2)))
+  if (!is.null(bd$note)) cat(strwrap(paste("Note:", bd$note), width = 78), sep = "\n")
+  invisible(NULL)
 }
 
 
@@ -1250,8 +1592,8 @@ utils::globalVariables(".bootmakr_w")
 #'
 #' Prints the table of bias-adjusted estimates with bootstrap standard
 #' errors, confidence intervals and p-values (one row per \code{kd}),
-#' followed by the descriptive benchmark-strength block, the robustness
-#' values and, if requested, the convergence diagnostics.
+#' followed by the descriptive benchmark-strength block, the breakdown kd,
+#' the robustness values and, if requested, the convergence diagnostics.
 #'
 #' @param x An object of class \code{"bootmakr"}, as returned by
 #'   \code{\link{bootmakr}}.
@@ -1332,6 +1674,8 @@ print.bootmakr <- function(x, ...) {
                 if (is_twoway) " (summed across the 3 sub-bootstraps)" else ""))
 
   .print_benchmark_strength(x$benchmark_strength)
+
+  .print_breakdown(x$breakdown)
 
   .print_robustness(x$robustness)
 
