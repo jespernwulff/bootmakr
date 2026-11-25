@@ -84,7 +84,11 @@
 #'   use a normal approximation \code{estimate +/- z * SE}. Two-way clustering
 #'   is incompatible with \code{strata}.
 #' @param strata,weights Column name or vector: strata for a stratified
-#'   bootstrap, and regression weights.
+#'   bootstrap, and regression weights. Weights are treated as fixed: each
+#'   unit is resampled together with its weight, and the weights are not
+#'   re-estimated within replications. They enter the outcome model and the
+#'   treatment model that measures the benchmark's strength, so every
+#'   partial R2 is a weighted one.
 #' @param dots Deprecated; use \code{progress} instead.
 #' @param progress Logical: show a progress bar (default TRUE).
 #' @param converge \code{TRUE}, \code{FALSE}, or
@@ -118,7 +122,10 @@
 #'       \code{N_clust}}{sample size, replications requested, completed and
 #'       failed, and number of clusters.}
 #'     \item{\code{sensemakr_orig}}{the \code{sensemakr} object of the
-#'       original fit.}
+#'       original fit. With \code{weights} its benchmark bounds can differ
+#'       from those in \code{results}: \code{sensemakr} (checked in version
+#'       0.1.5) measures the benchmark's association with the treatment
+#'       without the weights.}
 #'   }
 #'   Use \code{print()} for the results table and \code{plot()} for the
 #'   kd-sweep, convergence and histogram plots.
@@ -404,26 +411,48 @@ bootmakr <- function(formula,
   }
 
   # ---- Regular benchmark / manual R2 pathway ----
-  sm_args <- list(model = fit, treatment = treat)
-  if (!is.null(benchmark_covariates)) sm_args$benchmark_covariates <- benchmark_covariates
-  sm_args$kd    <- kd
-  sm_args$ky    <- ky
-  sm_args$q     <- q
-  sm_args$alpha <- alpha
-  if (!is.null(r2dz.x))     sm_args$r2dz.x     <- r2dz.x
-  if (!is.null(r2yz.dx))    sm_args$r2yz.dx     <- r2yz.dx
-  if (!is.null(bound_label)) sm_args$bound_label <- bound_label
-  sm_args$reduce <- reduce
+  # Computed step by step instead of through sensemakr::sensemakr().
+  # sensemakr's benchmarking routine refits the treatment model as an
+  # UNWEIGHTED lm(d ~ XX + 0) whatever weights `fit` carries, so with
+  # `weights` the treatment-side partial R2 of the benchmark, and the bound
+  # kd * R2 / (1 - R2) built on it, ignored the weights while the outcome
+  # side used them (and the grouped pathway above used them on both sides).
+  # Here the treatment model carries the weights of `fit`; see
+  # .treatment_model_sm(). For an unweighted `fit` every step is the call
+  # sensemakr itself makes, so unweighted results are unchanged. Row order
+  # mirrors sensemakr's bounds table: manual bound(s) first, then the
+  # benchmarks, kd varying within benchmark.
+  coefs <- summary(fit)$coefficients
+  if (!(treat %in% rownames(coefs)))
+    stop("Variables not found in model: ", treat)
+  est   <- coefs[treat, "Estimate"]
+  se    <- coefs[treat, "Std. Error"]
+  dof   <- fit$df.residual
+  vals  <- numeric(0)
 
-  sm <- do.call(sensemakr::sensemakr, sm_args)
-  bnds <- sm$bounds
-  if (is.null(bnds) || nrow(bnds) == 0) return(rep(NA_real_, n_kd))
-
-  if (n_kd > 1) {
-    bnds$adjusted_estimate[seq_len(n_kd)]
-  } else {
-    bnds$adjusted_estimate[bounds_row]
+  if (!is.null(r2dz.x)) {
+    r2yz_manual <- if (is.null(r2yz.dx)) r2dz.x else r2yz.dx
+    if (any(r2dz.x < 0 | r2dz.x > 1 | r2yz_manual < 0 | r2yz_manual > 1))
+      stop("partial R2 must be a number between zero and one")
+    vals <- c(vals, sensemakr::adjusted_estimate(
+      estimate = est, se = se, dof = dof,
+      r2dz.x = r2dz.x, r2yz.dx = r2yz_manual, reduce = reduce))
   }
+
+  if (!is.null(benchmark_covariates)) {
+    base <- .single_base_r2(fit, treat, benchmark_covariates)
+    for (j in seq_along(benchmark_covariates)) {
+      bnd <- sensemakr::ovb_partial_r2_bound(
+        r2dxj.x = base$r2dxj.x[j], r2yxj.dx = base$r2yxj.dx[j],
+        kd = kd, ky = ky, bound_label = benchmark_covariates[j])
+      vals <- c(vals, sensemakr::adjusted_estimate(
+        estimate = est, se = se, dof = dof,
+        r2dz.x = bnd$r2dz.x, r2yz.dx = bnd$r2yz.dx, reduce = reduce))
+    }
+  }
+
+  if (length(vals) == 0) return(rep(NA_real_, n_kd))
+  if (n_kd > 1) vals[seq_len(n_kd)] else vals[bounds_row]
 }
 
 
@@ -463,15 +492,32 @@ bootmakr <- function(formula,
   list(r2dxj.x = unname(r2dxj.x), r2yxj.dx = unname(r2yxj.dx))
 }
 
-#' Treatment model exactly as sensemakr's benchmarking routine builds it
-#' (model matrix of the outcome model, treatment regressed on all other
-#' columns, no intercept beyond the model-matrix constant, unweighted).
+#' Treatment model as sensemakr's benchmarking routine builds it (model matrix
+#' of the outcome model, treatment regressed on all other columns, no
+#' intercept beyond the model-matrix constant), except that it carries the
+#' weights of the outcome model. sensemakr fits it unweighted even when the
+#' outcome model is weighted. `fit$weights` has one entry per model-matrix
+#' row, so the two stay aligned when rows are dropped for missing values.
 #' @noRd
 .treatment_model_sm <- function(fit, treat) {
   m  <- model.matrix(fit)
   d  <- m[, treat]
   XX <- m[, !(colnames(m) %in% treat), drop = FALSE]
-  lm(d ~ XX + 0)
+  w_fit <- fit$weights
+  if (is.null(w_fit)) lm(d ~ XX + 0) else lm(d ~ XX + 0, weights = w_fit)
+}
+
+#' Partial R2s of each single benchmark covariate: with the outcome given the
+#' treatment and the other covariates (r2yxj.dx, from the outcome model) and
+#' with the treatment given the other covariates (r2dxj.x, from the treatment
+#' model, weighted like the outcome model). Shared by the bootstrap pathway
+#' and the descriptive block so that both report the same numbers.
+#' @noRd
+.single_base_r2 <- function(fit, treat, benchmark_covariates) {
+  r2yxj.dx <- sensemakr::partial_r2(fit, covariates = benchmark_covariates)
+  tm       <- .treatment_model_sm(fit, treat)
+  r2dxj.x  <- sensemakr::partial_r2(tm, covariates = paste0("XX", benchmark_covariates))
+  list(r2dxj.x = unname(r2dxj.x), r2yxj.dx = unname(r2yxj.dx))
 }
 
 #' Descriptive benchmark strength.
@@ -517,23 +563,25 @@ bootmakr <- function(formula,
       list(type = "group", observed = observed, implied = implied)
     } else if (!is.null(benchmark_covariates)) {
       # Observed strength, computed as in sensemakr's benchmarking routine
-      r2yxj.dx <- sensemakr::partial_r2(fit, covariates = benchmark_covariates)
-      tm       <- .treatment_model_sm(fit, treat)
-      r2dxj.x  <- sensemakr::partial_r2(tm, covariates = paste0("XX", benchmark_covariates))
+      # but with the treatment model weighted like the outcome model
+      base <- .single_base_r2(fit, treat, benchmark_covariates)
       observed <- data.frame(benchmark = benchmark_covariates,
-                             r2dxj.x = unname(r2dxj.x), r2yxj.dx = unname(r2yxj.dx),
+                             r2dxj.x = base$r2dxj.x, r2yxj.dx = base$r2yxj.dx,
                              stringsAsFactors = FALSE)
-      # Implied strength of the omitted variable: sensemakr's own bounds
-      # (rows ordered benchmark-by-benchmark, kd within benchmark -- the same
-      # order used for the adjusted estimates)
-      bnds <- sensemakr::ovb_bounds(fit, treatment = treat,
-                                    benchmark_covariates = benchmark_covariates,
-                                    kd = kd, ky = ky, adjusted_estimates = FALSE)
-      n_b  <- length(benchmark_covariates)
-      implied <- data.frame(benchmark = rep(benchmark_covariates, each = n_kd),
-                            kd = rep(kd, times = n_b), ky = rep(ky, times = n_b),
-                            r2dz.x = bnds$r2dz.x, r2yz.dx = bnds$r2yz.dx,
-                            stringsAsFactors = FALSE)
+      # Implied strength of the omitted variable: sensemakr's bound formula
+      # applied to those partial R2s (rows ordered benchmark-by-benchmark, kd
+      # within benchmark -- the same order used for the adjusted estimates).
+      # Not sensemakr::ovb_bounds(fit, ...), which would refit the treatment
+      # model without the weights.
+      implied <- do.call(rbind, lapply(seq_along(benchmark_covariates), function(j) {
+        b <- sensemakr::ovb_partial_r2_bound(
+          r2dxj.x = base$r2dxj.x[j], r2yxj.dx = base$r2yxj.dx[j],
+          kd = kd, ky = ky, bound_label = benchmark_covariates[j]
+        )
+        data.frame(benchmark = benchmark_covariates[j], kd = kd, ky = ky,
+                   r2dz.x = b$r2dz.x, r2yz.dx = b$r2yz.dx,
+                   stringsAsFactors = FALSE)
+      }))
       list(type = "single", observed = observed, implied = implied)
     } else {
       implied <- data.frame(benchmark = bound_label %||% "manual",

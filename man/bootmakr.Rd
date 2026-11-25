@@ -86,7 +86,11 @@ use a normal approximation \code{estimate +/- z * SE}. Two-way clustering
 is incompatible with \code{strata}.}
 
 \item{strata, weights}{Column name or vector: strata for a stratified
-bootstrap, and regression weights.}
+bootstrap, and regression weights. Weights are treated as fixed: each
+unit is resampled together with its weight, and the weights are not
+re-estimated within replications. They enter the outcome model and the
+treatment model that measures the benchmark's strength, so every
+partial R2 is a weighted one.}
 
 \item{progress}{Logical: show a progress bar (default TRUE).}
 
@@ -126,7 +130,10 @@ with two-way clustering).}
 \code{N_clust}}{sample size, replications requested, completed and
 failed, and number of clusters.}
 \item{\code{sensemakr_orig}}{the \code{sensemakr} object of the
-original fit.}
+original fit. With \code{weights} its benchmark bounds can differ
+from those in \code{results}: \code{sensemakr} (checked in version
+0.1.5) measures the benchmark's association with the treatment
+without the weights.}
 }
 Use \code{print()} for the results table and \code{plot()} for the
 kd-sweep, convergence and histogram plots.

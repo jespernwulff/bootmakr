@@ -1,3 +1,19 @@
+# bootmakr (development version)
+
+* With `weights`, a benchmark given through `benchmark_covariates` is now
+  measured with the weights on both sides. Until now only the outcome model
+  used them: the benchmark's partial R² with the treatment came from an
+  unweighted regression, as in `sensemakr` 0.1.5, while `gbenchmark_covariates`
+  already used the weights, so the same covariate could give two different
+  answers. Adjusted estimates, bootstrap results and the benchmark-strength
+  block of a weighted analysis with `benchmark_covariates` therefore change.
+  Results without weights, and weighted results with `gbenchmark_covariates`,
+  do not. `$sensemakr_orig` is still `sensemakr`'s own object, so its
+  bounds can differ from those in `$results` when weights are used.
+* The documentation of `weights` now says that weights are treated as fixed:
+  each unit is resampled together with its weight, and weights are not
+  re-estimated within replications.
+
 # bootmakr 0.4.0
 
 * The benchmark-strength block now reports the **impact** of the assumed
