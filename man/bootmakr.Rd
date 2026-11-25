@@ -125,6 +125,18 @@ covariates, used in that recursion).}
 \item{\code{boot_samples}}{matrix of bootstrap draws of the adjusted
 estimate, one column per \code{kd} (a list of three such matrices
 with two-way clustering).}
+\item{\code{robustness}}{list with the robustness values of the
+treatment coefficient: \code{rv_q} and \code{rv_qa} from
+\code{sensemakr} (the latter at \code{alpha}, with the
+conventional standard error) and \code{rv_qa_boot}, the bootstrap
+robustness value; also \code{n_used}, the number of replicates it
+is based on, and a \code{note} when it is not available.}
+\item{\code{boot_base}}{matrix with the unadjusted treatment
+coefficient (\code{estimate}) and its \code{scale}, the standard
+error times the square root of the residual degrees of freedom, in
+every replicate (a list of three such matrices with two-way
+clustering). The adjusted estimate for any strength of the omitted
+variable can be computed from these two columns.}
 \item{\code{convergence}}{convergence diagnostics, if requested.}
 \item{\code{N}, \code{N_reps}, \code{N_successful}, \code{N_fail},
 \code{N_clust}}{sample size, replications requested, completed and
@@ -177,6 +189,27 @@ estimate away from zero (towards zero when \code{reduce = FALSE}). All of
 these are functions of the data alone. No standard error enters them, so
 they do not depend on the variance estimator, and none of them is a
 threshold. They are stored in \code{$benchmark_strength}.
+
+The print method also reports the \strong{robustness value} of the
+treatment coefficient, which needs no benchmark: the strength an omitted
+variable must have, as a partial R2 with the treatment and with the
+outcome alike, to overturn the result. Three numbers are given. The
+first two are \code{sensemakr}'s: the strength that brings the adjusted
+estimate to zero, and the strength at which the adjusted estimate is no
+longer significant at \code{alpha} when judged with the conventional OLS
+standard error. The third is the bootstrap counterpart of the second:
+the smallest strength at which the bootstrap test used for the table of
+adjusted estimates stops rejecting. Running \code{bootmakr()} with
+\code{r2dz.x} and \code{r2yz.dx} both set to that value and the same
+\code{seed} returns a p-value of \code{alpha} or just above. It is
+computed from the coefficient and the residual scale of every replicate,
+without refitting, uses every replicate in which the regression could be
+fitted, and is available for \code{q = 1} and \code{reduce = TRUE}. It
+carries the same notion of uncertainty as the table: the sampling
+variability of the adjusted estimate for an omitted variable of given
+strength. It is not a statement about the robust standard error that the
+regression including the omitted variable would have had. The three
+numbers are stored in \code{$robustness}.
 
 The bootstrap procedure follows Cinelli, Ferwerda and Hazlett (2024,
 Appendix C); Lonati and Wulff (2026) show why it is needed when the

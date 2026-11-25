@@ -39,6 +39,27 @@
 #' they do not depend on the variance estimator, and none of them is a
 #' threshold. They are stored in \code{$benchmark_strength}.
 #'
+#' The print method also reports the \strong{robustness value} of the
+#' treatment coefficient, which needs no benchmark: the strength an omitted
+#' variable must have, as a partial R2 with the treatment and with the
+#' outcome alike, to overturn the result. Three numbers are given. The
+#' first two are \code{sensemakr}'s: the strength that brings the adjusted
+#' estimate to zero, and the strength at which the adjusted estimate is no
+#' longer significant at \code{alpha} when judged with the conventional OLS
+#' standard error. The third is the bootstrap counterpart of the second:
+#' the smallest strength at which the bootstrap test used for the table of
+#' adjusted estimates stops rejecting. Running \code{bootmakr()} with
+#' \code{r2dz.x} and \code{r2yz.dx} both set to that value and the same
+#' \code{seed} returns a p-value of \code{alpha} or just above. It is
+#' computed from the coefficient and the residual scale of every replicate,
+#' without refitting, uses every replicate in which the regression could be
+#' fitted, and is available for \code{q = 1} and \code{reduce = TRUE}. It
+#' carries the same notion of uncertainty as the table: the sampling
+#' variability of the adjusted estimate for an omitted variable of given
+#' strength. It is not a statement about the robust standard error that the
+#' regression including the omitted variable would have had. The three
+#' numbers are stored in \code{$robustness}.
+#'
 #' The bootstrap procedure follows Cinelli, Ferwerda and Hazlett (2024,
 #' Appendix C); Lonati and Wulff (2026) show why it is needed when the
 #' regression calls for robust standard errors.
@@ -117,6 +138,18 @@
 #'     \item{\code{boot_samples}}{matrix of bootstrap draws of the adjusted
 #'       estimate, one column per \code{kd} (a list of three such matrices
 #'       with two-way clustering).}
+#'     \item{\code{robustness}}{list with the robustness values of the
+#'       treatment coefficient: \code{rv_q} and \code{rv_qa} from
+#'       \code{sensemakr} (the latter at \code{alpha}, with the
+#'       conventional standard error) and \code{rv_qa_boot}, the bootstrap
+#'       robustness value; also \code{n_used}, the number of replicates it
+#'       is based on, and a \code{note} when it is not available.}
+#'     \item{\code{boot_base}}{matrix with the unadjusted treatment
+#'       coefficient (\code{estimate}) and its \code{scale}, the standard
+#'       error times the square root of the residual degrees of freedom, in
+#'       every replicate (a list of three such matrices with two-way
+#'       clustering). The adjusted estimate for any strength of the omitted
+#'       variable can be computed from these two columns.}
 #'     \item{\code{convergence}}{convergence diagnostics, if requested.}
 #'     \item{\code{N}, \code{N_reps}, \code{N_successful}, \code{N_fail},
 #'       \code{N_clust}}{sample size, replications requested, completed and
@@ -310,6 +343,7 @@ bootmakr <- function(formula,
                         loop_args))
 
     boot_samples <- list(G = out_G$boot_mat, H = out_H$boot_mat, GH = out_GH$boot_mat)
+    boot_base    <- list(G = out_G$base_mat, H = out_H$base_mat, GH = out_GH$base_mat)
     results      <- .compute_twoway_stats(boot_samples, obs_estimates, kd, alpha)
     n_fail       <- out_G$n_fail + out_H$n_fail + out_GH$n_fail
     n_successful <- min(sum(complete.cases(boot_samples$G)),
@@ -323,6 +357,7 @@ bootmakr <- function(formula,
     out <- do.call(.run_bootstrap_loop,
                    c(list(resample_info = resample_info, label = NULL), loop_args))
     boot_samples <- out$boot_mat
+    boot_base    <- out$base_mat
     results      <- .compute_boot_stats(boot_samples, obs_estimates, kd, alpha)
     n_fail       <- out$n_fail
     n_successful <- sum(complete.cases(boot_samples))
@@ -330,6 +365,9 @@ bootmakr <- function(formula,
     method       <- "percentile"
   }
   results <- .attach_r2(results, bench_strength, n_kd)
+
+  # ---- Robustness value (does not depend on the benchmark or on kd) ----
+  robustness <- .robustness(fit_orig, treat, q, alpha, reduce, boot_base, is_twoway)
 
   conv_out <- NULL
   if (conv_opts$do_converge) {
@@ -344,6 +382,8 @@ bootmakr <- function(formula,
     list(
       results       = results,
       boot_samples  = boot_samples,
+      boot_base     = boot_base,
+      robustness    = robustness,
       convergence   = conv_out,
       call          = cl,
       method        = method,
@@ -847,6 +887,9 @@ utils::globalVariables(".bootmakr_w")
   n_kd     <- length(kd)
   boot_mat <- matrix(NA_real_, nrow = reps, ncol = n_kd)
   colnames(boot_mat) <- paste0("kd_", kd)
+  # Unadjusted coefficient and its scale in every replicate; see .coef_scale()
+  base_mat <- matrix(NA_real_, nrow = reps, ncol = 2,
+                     dimnames = list(NULL, c("estimate", "scale")))
   n_fail   <- 0L
 
   if (show_progress) {
@@ -862,19 +905,27 @@ utils::globalVariables(".bootmakr_w")
     if (show_progress) setTxtProgressBar(pb, b)
     boot_idx <- .resample_once(resample_info)
     d_boot   <- data[boot_idx, , drop = FALSE]
-    boot_mat[b, ] <- tryCatch({
-      fit_b <- .fit_lm(formula, d_boot, weight_vec[boot_idx])
-      .get_adjusted_estimates(
-        fit_b, d_boot, formula, treat, weight_vec[boot_idx],
-        benchmark_covariates, gbenchmark_covariates,
-        kd, ky, q, alpha, r2dz.x, r2yz.dx, bound_label, reduce, bounds_row
-      )
-    }, error = function(e) rep(NA_real_, n_kd))
+    # The fit, the unadjusted coefficient and the adjusted estimates are
+    # guarded separately: a replicate in which only the benchmark bound fails
+    # (kd too large for that resample) still has a coefficient and a scale,
+    # and these are all the robustness value needs.
+    fit_b <- tryCatch(.fit_lm(formula, d_boot, weight_vec[boot_idx]),
+                      error = function(e) NULL)
+    if (!is.null(fit_b)) {
+      base_mat[b, ] <- tryCatch(.coef_scale(fit_b, treat),
+                                error = function(e) c(NA_real_, NA_real_))
+      boot_mat[b, ] <- tryCatch(
+        .get_adjusted_estimates(
+          fit_b, d_boot, formula, treat, weight_vec[boot_idx],
+          benchmark_covariates, gbenchmark_covariates,
+          kd, ky, q, alpha, r2dz.x, r2yz.dx, bound_label, reduce, bounds_row
+        ), error = function(e) rep(NA_real_, n_kd))
+    }
     if (any(!is.finite(boot_mat[b, ]))) n_fail <- n_fail + 1L
   }
   if (show_progress) { close(pb); cat("\n") }
 
-  list(boot_mat = boot_mat, n_fail = n_fail)
+  list(boot_mat = boot_mat, base_mat = base_mat, n_fail = n_fail)
 }
 
 .compute_boot_stats <- function(boot_mat, obs_estimates, kd, alpha) {
@@ -1028,6 +1079,162 @@ utils::globalVariables(".bootmakr_w")
 
 
 # ==============================================================================
+# Robustness value
+# ==============================================================================
+# With an omitted variable of strength r2dz.x = r2yz.dx = r, sensemakr's
+# adjusted estimate is
+#     sign(est) * (|est| - scale * r / sqrt(1 - r)),   scale = se * sqrt(dof),
+# so the coefficient and its scale are all that is needed to evaluate it at
+# any r, in the original fit and in every bootstrap replicate, without
+# refitting anything. `scale` is the ratio of the residual standard
+# deviations of the outcome and of the treatment; the conventional standard
+# error enters it only as a way of computing that ratio.
+
+#' Coefficient of the treatment and its scale, se * sqrt(dof)
+#' @noRd
+.coef_scale <- function(fit, treat) {
+  coefs <- summary(fit)$coefficients
+  if (!(treat %in% rownames(coefs)))
+    return(c(estimate = NA_real_, scale = NA_real_))
+  c(estimate = unname(coefs[treat, "Estimate"]),
+    scale    = unname(coefs[treat, "Std. Error"]) * sqrt(fit$df.residual))
+}
+
+#' sensemakr's adjusted estimate (reduce = TRUE) at equal strength r
+#' @noRd
+.adj_at <- function(est, scale, r) sign(est) * (abs(est) - scale * r / sqrt(1 - r))
+
+#' Strength r at which the adjusted estimate is exactly zero. This is
+#' sensemakr's RV_q for q = 1, written so that it does not lose precision
+#' when |est| / scale is large.
+#' @noRd
+.rv_zero <- function(est, scale) {
+  f2 <- (est / scale)^2
+  2 * f2 / (sqrt(f2^2 + 4 * f2) + f2)
+}
+
+#' Bootstrap robustness value, percentile case.
+#'
+#' The smallest r from which the percentile-bootstrap p-value of the adjusted
+#' estimate, 2 * min(share <= 0, share >= 0), is at least alpha. The p-value
+#' is a step function of r that changes only where a replicate's adjusted
+#' estimate crosses zero, i.e. at that replicate's own .rv_zero(), so the
+#' search over those points is exact. As in the main table, the direction of
+#' the adjustment follows the sign of the coefficient in each replicate: a
+#' replicate with a positive coefficient is at or below zero from its
+#' crossing point onwards, one with a negative coefficient up to it. Both
+#' groups are counted, because the p-value need not be monotone in r.
+#' @noRd
+.bootstrap_rv_percentile <- function(base, alpha) {
+  ok <- is.finite(base[, 1]) & is.finite(base[, 2]) & base[, 2] > 0
+  e  <- base[ok, 1]; s <- base[ok, 2]; B <- length(e)
+  if (B < 10) return(NA_real_)
+  if (2 * min(mean(e <= 0), mean(e >= 0)) >= alpha) return(0)
+
+  cr   <- .rv_zero(e, s)
+  cpos <- sort(cr[e > 0]); cneg <- sort(cr[e < 0]); n0 <- sum(e == 0)
+  cand <- sort(unique(cr[e != 0]))
+  pos_le <- findInterval(cand, cpos)      # positive replicates crossed by cand
+  neg_le <- findInterval(cand, cneg)      # negative replicates crossed by cand
+  # counts just above each candidate point
+  n_le0 <- pos_le + (length(cneg) - neg_le) + n0
+  n_ge0 <- (length(cpos) - pos_le) + neg_le + n0
+  hit   <- which(2 * pmin(n_le0 / B, n_ge0 / B) >= alpha)
+  if (length(hit) == 0) NA_real_ else cand[hit[1]]
+}
+
+#' Bootstrap robustness value, two-way case.
+#'
+#' The smallest r at which |adjusted estimate| / SE falls to the normal
+#' critical value, with SE = sqrt(V_G + V_H - V_GH) recomputed at every r
+#' from the three sets of replicates (and the same max(V_G, V_H) fallback as
+#' the main table, without its warning). A grid locates the first crossing;
+#' uniroot then refines it inside that bracket.
+#' @noRd
+.bootstrap_rv_twoway <- function(base_list, obs, alpha) {
+  bs <- lapply(base_list, function(m)
+    m[is.finite(m[, 1]) & is.finite(m[, 2]) & m[, 2] > 0, , drop = FALSE])
+  if (any(vapply(bs, nrow, integer(1)) < 10) || !all(is.finite(obs)))
+    return(NA_real_)
+  z_crit <- qnorm(1 - alpha / 2)
+  h <- function(r) {
+    v  <- vapply(bs, function(m) var(.adj_at(m[, 1], m[, 2], r)), numeric(1))
+    v2 <- v[["G"]] + v[["H"]] - v[["GH"]]
+    if (!is.finite(v2) || v2 < 0) v2 <- max(v[["G"]], v[["H"]])
+    abs(.adj_at(obs[[1]], obs[[2]], r)) / sqrt(v2) - z_crit
+  }
+  if (h(0) <= 0) return(0)
+  # the adjusted estimate of the original fit is zero at .rv_zero(), so the
+  # statistic has fallen below the critical value somewhere before it
+  grid <- seq(0, .rv_zero(obs[[1]], obs[[2]]), length.out = 201)
+  hv   <- vapply(grid, h, numeric(1))
+  i    <- which(hv <= 0)[1]
+  if (is.na(i)) return(NA_real_)
+  stats::uniroot(h, lower = grid[i - 1], upper = grid[i], tol = 1e-12)$root
+}
+
+#' Robustness values of the treatment coefficient
+#'
+#' rv_q and rv_qa are sensemakr's own numbers for the original fit; rv_qa
+#' rests on the conventional OLS standard error. rv_qa_boot is the bootstrap
+#' counterpart: the strength at which the test in the main table stops
+#' rejecting. It is defined for q = 1 and reduce = TRUE only, because that
+#' is the only null hypothesis the bootstrap table tests (adjusted
+#' estimate = 0, omitted variable pulling the estimate towards zero).
+#' @noRd
+.robustness <- function(fit, treat, q, alpha, reduce, boot_base, is_twoway) {
+  sm_rv <- function(a) tryCatch(
+    as.numeric(sensemakr::robustness_value(fit, covariates = treat, q = q, alpha = a)),
+    error = function(e) NA_real_)
+  obs  <- tryCatch(.coef_scale(fit, treat),
+                   error = function(e) c(estimate = NA_real_, scale = NA_real_))
+  note <- NULL
+  rv_boot <- NA_real_
+  if (!isTRUE(reduce)) {
+    note <- "The bootstrap robustness value is defined for reduce = TRUE only."
+  } else if (!isTRUE(all.equal(q, 1))) {
+    note <- "The bootstrap robustness value is available for q = 1 only."
+  } else {
+    rv_boot <- tryCatch(
+      if (is_twoway) .bootstrap_rv_twoway(boot_base, obs, alpha)
+      else           .bootstrap_rv_percentile(boot_base, alpha),
+      error = function(e) NA_real_)
+    if (is.na(rv_boot))
+      note <- "The bootstrap robustness value could not be computed."
+  }
+  n_used <- if (is_twoway) {
+    min(vapply(boot_base, function(m) sum(is.finite(m[, 1]) & is.finite(m[, 2])), integer(1)))
+  } else sum(is.finite(boot_base[, 1]) & is.finite(boot_base[, 2]))
+  list(rv_q = sm_rv(1), rv_qa = sm_rv(alpha), rv_qa_boot = rv_boot,
+       q = q, alpha = alpha,
+       method = if (is_twoway) "cgm_twoway" else "percentile",
+       n_used = n_used, estimate = obs[["estimate"]], scale = obs[["scale"]],
+       note = note)
+}
+
+.print_robustness <- function(rb) {
+  if (is.null(rb)) return(invisible(NULL))
+  pct <- format(rb$alpha * 100)
+  f   <- function(v) if (is.na(v)) "    NA" else formatC(v, format = "f", digits = 4)
+  cat("\nRobustness value (omitted variable equally strong with treatment and outcome):\n")
+  lab <- c(sprintf("Adjusted estimate = %s", if (isTRUE(all.equal(rb$q, 1))) "0"
+                   else sprintf("%g%% lower", rb$q * 100)),
+           sprintf("Not significant at %s%%, conventional SE (sensemakr)", pct),
+           sprintf("Not significant at %s%%, bootstrap", pct))
+  val <- c(f(rb$rv_q), f(rb$rv_qa), f(rb$rv_qa_boot))
+  cat(sprintf("  %-*s  %s\n", max(nchar(lab)), lab, val), sep = "")
+  cat("(partial R2 of the omitted variable with the treatment and with the outcome;\n",
+      if (identical(rb$method, "cgm_twoway"))
+        " bootstrap: smallest strength at which the two-way z-test stops rejecting)\n"
+      else
+        " bootstrap: smallest strength at which the bootstrap p-value reaches alpha)\n",
+      sep = "")
+  if (!is.null(rb$note)) cat("Note: ", rb$note, "\n", sep = "")
+  invisible(NULL)
+}
+
+
+# ==============================================================================
 # Print method
 # ==============================================================================
 
@@ -1035,8 +1242,8 @@ utils::globalVariables(".bootmakr_w")
 #'
 #' Prints the table of bias-adjusted estimates with bootstrap standard
 #' errors, confidence intervals and p-values (one row per \code{kd}),
-#' followed by the descriptive benchmark-strength block and, if requested,
-#' the convergence diagnostics.
+#' followed by the descriptive benchmark-strength block, the robustness
+#' values and, if requested, the convergence diagnostics.
 #'
 #' @param x An object of class \code{"bootmakr"}, as returned by
 #'   \code{\link{bootmakr}}.
@@ -1117,6 +1324,8 @@ print.bootmakr <- function(x, ...) {
                 if (is_twoway) " (summed across the 3 sub-bootstraps)" else ""))
 
   .print_benchmark_strength(x$benchmark_strength)
+
+  .print_robustness(x$robustness)
 
   if (!is.null(x$convergence)) .print_convergence(x$convergence)
   invisible(x)

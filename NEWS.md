@@ -1,5 +1,30 @@
 # bootmakr (development version)
 
+This version lives on the `experimental` branch. The released package on
+`master` is 0.4.0 and is not changed while the paper is under review.
+
+* New: a **bootstrap robustness value**. `print()` now ends with the
+  robustness values of the treatment coefficient, and they are stored in
+  `$robustness`: `sensemakr`'s two values (the strength of an omitted
+  variable, equally associated with treatment and outcome, that brings the
+  adjusted estimate to zero, `rv_q`, and the strength at which it is no
+  longer significant at `alpha` under the conventional OLS standard error,
+  `rv_qa`) and their bootstrap counterpart, `rv_qa_boot`: the smallest
+  strength at which the bootstrap test in the table of adjusted estimates
+  stops rejecting. Running `bootmakr()` again with `r2dz.x` and `r2yz.dx`
+  set to that value and the same seed gives a p-value of `alpha` or just
+  above. It needs no benchmark and no extra model fits, works with every
+  resampling scheme including two-way clustering, and is available for
+  `q = 1` and `reduce = TRUE`. It has the same target as the table, the
+  sampling variability of the adjusted estimate at a given strength of the
+  omitted variable, and is not a statement about the robust standard error
+  of the regression that would include that variable.
+* New element `$boot_base`: the unadjusted treatment coefficient and its
+  scale (standard error times the square root of the residual degrees of
+  freedom) in every replicate. The adjusted estimate at any strength of the
+  omitted variable is a closed form in these two numbers.
+* Adjusted estimates, bootstrap draws and all other results are unchanged
+  for a given seed.
 * With `weights`, a benchmark given through `benchmark_covariates` is now
   measured with the weights on both sides. Until now only the outcome model
   used them: the benchmark's partial R² with the treatment came from an

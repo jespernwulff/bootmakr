@@ -1,6 +1,6 @@
 Package: bootmakr
 Title: Bootstrap Inference for Sensemakr Sensitivity Analysis
-Version: 0.4.0
+Version: 0.4.0.9000
 Authors@R: c(
     person("Jesper N.", "Wulff", email = "jwulff@econ.au.dk", role = c("aut", "cre")),
     person("Sirio", "Lonati", role = "aut")
