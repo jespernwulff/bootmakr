@@ -78,6 +78,31 @@ test_that("with two-way clustering it is where the z-test stops rejecting", {
   expect_gt(do.call(rerun_p, c(list(rv * (1 + 1e-4)), args)), 0.05)
 })
 
+test_that("replicates with a coefficient of the opposite sign are counted on both sides", {
+  # a weak effect: several replicates have a negative coefficient, so the
+  # p-value is not monotone in the strength of the omitted variable
+  set.seed(11)
+  d <- data.frame(x = rnorm(150), c = rnorm(150))
+  d$y <- 0.10 * d$x + 0.5 * d$c + rnorm(150)
+  args <- list(y ~ x + c, data = d, treat = "x", alpha = 0.30, reps = 60, seed = 11)
+  out <- do.call(bootmakr, c(args, list(benchmark_covariates = "c", progress = FALSE)))
+  rv  <- out$robustness$rv_qa_boot
+
+  expect_gt(sum(out$boot_base[, "estimate"] < 0), 0)
+  expect_gt(rv, 0)
+  expect_lt(do.call(rerun_p, c(list(rv * (1 - 1e-8)), args)), 0.30)
+  expect_gte(do.call(rerun_p, c(list(rv * (1 + 1e-8)), args)), 0.30)
+
+  # first strength on a grid at which the p-value reaches alpha
+  b    <- out$boot_base
+  grid <- seq(0, 0.2, length.out = 20001)
+  p    <- vapply(grid, function(r) {
+    a <- sign(b[, 1]) * (abs(b[, 1]) - b[, 2] * r / sqrt(1 - r))
+    2 * min(mean(a <= 0), mean(a >= 0))
+  }, numeric(1))
+  expect_lt(abs(grid[which(p >= 0.30)[1]] - rv), 1.5e-5)
+})
+
 test_that("replicates whose benchmark bound fails still count", {
   # just below the kd at which the bound on r2dz.x reaches one, the bound is
   # impossible in part of the replicates; the robustness value does not use

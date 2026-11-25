@@ -11,14 +11,18 @@ This version lives on the `experimental` branch. The released package on
   longer significant at `alpha` under the conventional OLS standard error,
   `rv_qa`) and their bootstrap counterpart, `rv_qa_boot`: the smallest
   strength at which the bootstrap test in the table of adjusted estimates
-  stops rejecting. Running `bootmakr()` again with `r2dz.x` and `r2yz.dx`
-  set to that value and the same seed gives a p-value of `alpha` or just
-  above. It needs no benchmark and no extra model fits, works with every
+  stops rejecting. Running `bootmakr()` again with the same seed and
+  `r2dz.x` and `r2yz.dx` marginally above that value gives a p-value of at
+  least `alpha`, and marginally below it a p-value below `alpha`. It needs
+  no benchmark and no extra model fits, works with every
   resampling scheme including two-way clustering, and is available for
   `q = 1` and `reduce = TRUE`. It has the same target as the table, the
   sampling variability of the adjusted estimate at a given strength of the
   omitted variable, and is not a statement about the robust standard error
-  of the regression that would include that variable.
+  of the regression that would include that variable. As in the table, the
+  omitted variable pulls the coefficient of each replicate towards zero
+  whatever its sign there, which raises the bootstrap value when many
+  replicates have the opposite sign (a weak effect).
 * New element `$boot_base`: the unadjusted treatment coefficient and its
   scale (standard error times the square root of the residual degrees of
   freedom) in every replicate. The adjusted estimate at any strength of the

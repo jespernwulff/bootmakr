@@ -48,9 +48,17 @@
 #' longer significant at \code{alpha} when judged with the conventional OLS
 #' standard error. The third is the bootstrap counterpart of the second:
 #' the smallest strength at which the bootstrap test used for the table of
-#' adjusted estimates stops rejecting. Running \code{bootmakr()} with
-#' \code{r2dz.x} and \code{r2yz.dx} both set to that value and the same
-#' \code{seed} returns a p-value of \code{alpha} or just above. It is
+#' adjusted estimates stops rejecting.
+#' Running \code{bootmakr()} with the same \code{seed} and with \code{r2dz.x}
+#' and \code{r2yz.dx} both set marginally above that value returns a p-value
+#' of at least \code{alpha}; marginally below it, a p-value below
+#' \code{alpha}. As in the table, the omitted variable is taken to pull the
+#' coefficient of each replicate towards zero, whatever its sign in that
+#' replicate. When many replicates have a coefficient of the opposite sign to
+#' the estimate, as with a weak effect, this convention raises the bootstrap
+#' value, and a bootstrap value above \code{sensemakr}'s should then not be
+#' read as greater robustness.
+#' It is
 #' computed from the coefficient and the residual scale of every replicate,
 #' without refitting, uses every replicate in which the regression could be
 #' fitted, and is available for \code{q = 1} and \code{reduce = TRUE}. It
