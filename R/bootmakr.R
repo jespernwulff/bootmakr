@@ -101,6 +101,39 @@
 #' effect the bootstrap value can exceed the conventional one for that reason
 #' alone.
 #'
+#' After the robustness values the print method sets the \strong{standard
+#' errors of the adjusted estimate} side by side, one row per \code{kd}. The
+#' first is the bootstrap standard error of the table. The second, shown when
+#' a benchmark is re-estimated in every replicate, is the bootstrap standard
+#' error with the strength of the omitted variable held at its value in the
+#' original fit. It is computed from the same replicates, and the difference
+#' between the two is the part of the uncertainty that comes from estimating
+#' the benchmark. The third is \code{sensemakr}'s adjusted standard error,
+#' which rests on the conventional OLS standard error. The fourth is the
+#' closed form of Wainstein and Hazlett (2026): the robust standard error of
+#' the original fit multiplied by \code{sqrt((1 - r2yz.dx) / (1 - r2dz.x))},
+#' with one more regressor in its finite-sample correction. The robust
+#' standard error is HC1 without clusters, CR1 with one cluster variable and,
+#' as an extension made here, the Cameron, Gelbach and Miller combination of
+#' CR1 variances with two; strata are ignored. The closed form assumes that
+#' the omitted variable shrinks every residual of the outcome and of the
+#' treatment by the same proportion, and Acedanski (2026) shows that an
+#' omitted variable can move a robust standard error by much more than that.
+#' The last two standard errors refer to the regression that would include the
+#' omitted variable. The bootstrap refers to the sampling variability of the
+#' adjusted estimate, so the columns answer different questions and need not
+#' agree. They are stored in \code{$se_compare}.
+#'
+#' The print method ends with the \strong{ratio of the robust to the
+#' conventional standard error} of the treatment coefficient in the unadjusted
+#' regression, and with the change in that ratio when each benchmark covariate
+#' is taken out of the regression and put back (Acedanski, 2026, Section 6.2).
+#' A ratio away from one means that robust and conventional inference already
+#' differ before any omitted variable is considered. The change is a yardstick
+#' for how far one more covariate might move the ratio. Both are stored in
+#' \code{$se_ratio}, whose \code{cap} is the ratio plus the largest positive
+#' change.
+#'
 #' The bootstrap procedure follows Cinelli, Ferwerda and Hazlett (2024,
 #' Appendix C); Lonati and Wulff (2026) show why it is needed when the
 #' regression calls for robust standard errors.
@@ -143,7 +176,8 @@
 #'   subtractive variance estimator: three bootstraps are run (on each
 #'   dimension and on their intersection) and combined as
 #'   \code{V = V_G + V_H - V_(G n H)}. CIs and p-values for the two-way case
-#'   use a normal approximation \code{estimate +/- z * SE}. Two-way clustering
+#'   use a normal approximation \code{estimate +/- z * SE}, or a t distribution
+#'   with \code{twoway_crit = "t"}. Two-way clustering
 #'   is incompatible with \code{strata}.
 #' @param strata,weights Column name or vector: strata for a stratified
 #'   bootstrap, and regression weights. Weights are treated as fixed: each
@@ -151,6 +185,15 @@
 #'   re-estimated within replications. They enter the outcome model and the
 #'   treatment model that measures the benchmark's strength, so every
 #'   partial R2 is a weighted one.
+#'   \code{weights} may instead be a function that takes a data frame and
+#'   returns one non-negative weight per row, for example inverse propensity
+#'   score weights. It is called on the data and again on every resample, so
+#'   that the weights are re-estimated within replications (Option 1 in
+#'   Wainstein & Hazlett, 2026). A resample on which the function fails counts
+#'   as a failed replication. A benchmark is then measured with the
+#'   re-estimated weights themselves and not with the semi-weights that
+#'   Wainstein and Hazlett propose for covariates that enter the weights, so
+#'   supply \code{r2dz.x} and \code{r2yz.dx} if you need their bound.
 #' @param dots Deprecated; use \code{progress} instead.
 #' @param progress Logical: show a progress bar (default TRUE).
 #' @param converge \code{TRUE}, \code{FALSE}, or
@@ -160,6 +203,20 @@
 #'   summarises how much they still move, overall and from \code{threshold}
 #'   replications onwards.
 #' @param verbose Logical; currently unused.
+#' @param fix_benchmark Logical. If \code{TRUE}, the partial R2 of the
+#'   benchmark with the treatment and with the outcome are taken from the
+#'   original fit in every replicate instead of being re-estimated there, so
+#'   that the omitted variable has the same strength throughout. The table,
+#'   the breakdown kd and \code{$boot_bench} then refer to that fixed
+#'   strength. This is the bootstrap of Wainstein and Hazlett (2026), who hold
+#'   the two partial R2 of the omitted variable fixed. It leaves out the
+#'   uncertainty about how strong the benchmark is. Default \code{FALSE}.
+#' @param twoway_crit With two-way clustering, the reference distribution of
+#'   the confidence interval, the p-value, the breakdown kd and the bootstrap
+#'   robustness value: \code{"normal"} (the default, as in earlier versions)
+#'   or \code{"t"}, a t distribution with \code{min(G, H) - 1} degrees of
+#'   freedom, where \code{G} and \code{H} are the numbers of clusters in the
+#'   two dimensions (Cameron, Gelbach & Miller, 2011). Ignored otherwise.
 #' @return An object of class \code{"bootmakr"}, a list with (among others)
 #'   \describe{
 #'     \item{\code{results}}{data frame with one row per \code{kd}: adjusted
@@ -202,6 +259,16 @@
 #'       every replicate (a list of three such matrices with two-way
 #'       clustering). The adjusted estimate for any strength of the omitted
 #'       variable can be computed from these two columns.}
+#'     \item{\code{se_compare}}{list with \code{$table}, one row per \code{kd}
+#'       with the standard errors of the adjusted estimate (\code{bootstrap},
+#'       \code{bootstrap_fixed}, \code{conventional}, \code{robust}),
+#'       \code{$unadjusted} (conventional and robust standard error of the
+#'       treatment coefficient), \code{$robust_type} and a \code{note} where
+#'       one applies.}
+#'     \item{\code{se_ratio}}{list with \code{omega}, the ratio of the robust
+#'       to the conventional standard error of the treatment coefficient,
+#'       \code{$benchmarks} (the ratio without each benchmark and the
+#'       \code{change} when it is restored) and \code{cap}.}
 #'     \item{\code{convergence}}{convergence diagnostics, if requested.}
 #'     \item{\code{N}, \code{N_reps}, \code{N_successful}, \code{N_fail},
 #'       \code{N_clust}}{sample size, replications requested, completed and
@@ -232,6 +299,12 @@
 #' robust standard errors (and what to do instead). \emph{Academy of
 #' Management Proceedings}, 2026(1).
 #' \doi{10.5465/AMPROC.2026.247bp}
+#'
+#' Wainstein, L., & Hazlett, C. (2026). Sensitivity of weighted least squares
+#' estimators to omitted variables. arXiv:2508.02954.
+#'
+#' Acedanski, J. (2026). Robustness values with sandwich standard errors.
+#' Working paper, SSRN 7639842.
 #'
 #' @seealso \code{\link{print.bootmakr}}, \code{\link{plot.bootmakr}},
 #'   \code{\link{firms}}, \code{\link[sensemakr]{sensemakr}}
@@ -288,11 +361,16 @@ bootmakr <- function(formula,
                      progress = TRUE,
                      dots = 0,
                      converge = FALSE,
-                     verbose = FALSE) {
+                     verbose = FALSE,
+                     fix_benchmark = FALSE,
+                     twoway_crit = c("normal", "t")) {
 
   cl <- match.call()
   if (is.null(ky)) ky <- kd
   n_kd <- length(kd)
+  twoway_crit <- match.arg(twoway_crit)
+  if (!is.logical(fix_benchmark) || length(fix_benchmark) != 1 || is.na(fix_benchmark))
+    stop("`fix_benchmark` must be TRUE or FALSE.")
 
   # Validate: need exactly one of benchmark / gbenchmark / manual R2
   n_bench_args <- sum(!is.null(benchmark_covariates),
@@ -315,7 +393,12 @@ bootmakr <- function(formula,
   # Resolve cluster / strata / weights
   cluster_list  <- .resolve_cluster(cluster, data)
   strata_vec    <- .resolve_var(strata, data, "strata")
-  weight_vec    <- .resolve_var(weights, data, "weights")
+  # `weights` may be a function of the data: it is then called on the data
+  # and again on every resample, so the weights are re-estimated within
+  # replications instead of being resampled with their units
+  weight_fun    <- if (is.function(weights)) weights else NULL
+  weight_vec    <- if (is.null(weight_fun)) .resolve_var(weights, data, "weights")
+                   else .call_weight_fun(weight_fun, data)
   n_cluster_dims <- if (is.null(cluster_list)) 0L else length(cluster_list)
   is_twoway     <- n_cluster_dims == 2L
   if (is_twoway && !is.null(strata_vec))
@@ -371,10 +454,23 @@ bootmakr <- function(formula,
   bench_idx <- .table_benchmark_index(benchmark_covariates, gbenchmark_covariates,
                                       r2dz.x, n_kd, bounds_row)
 
+  # With fix_benchmark the partial R2s of the benchmark(s) in the original
+  # fit are used in every replicate instead of being re-estimated there
+  base_fixed <- if (isTRUE(fix_benchmark))
+    .bench_base(fit_orig, data, formula, treat, weight_vec,
+                benchmark_covariates, gbenchmark_covariates) else NULL
+
+  # Reference distribution of the two-way test: normal, or t with
+  # min(G, H) - 1 degrees of freedom
+  crit_df <- if (is_twoway && twoway_crit == "t")
+    min(resample_info_G$n_clust, resample_info_H$n_clust) - 1 else Inf
+  if (is_twoway && is.finite(crit_df) && crit_df < 1)
+    stop("`twoway_crit = \"t\"` needs at least two clusters in each dimension.")
+
   # ---- Bootstrap loop(s) ----
   loop_args <- list(
     reps = reps, data = data, formula = formula, treat = treat,
-    weight_vec = weight_vec,
+    weight_vec = weight_vec, weight_fun = weight_fun, base_fixed = base_fixed,
     benchmark_covariates = benchmark_covariates,
     gbenchmark_covariates = gbenchmark_covariates,
     kd = kd, ky = ky, q = q, alpha = alpha,
@@ -403,7 +499,7 @@ bootmakr <- function(formula,
     boot_samples <- list(G = out_G$boot_mat, H = out_H$boot_mat, GH = out_GH$boot_mat)
     boot_base    <- list(G = out_G$base_mat, H = out_H$base_mat, GH = out_GH$base_mat)
     boot_bench   <- list(G = out_G$bench_mat, H = out_H$bench_mat, GH = out_GH$bench_mat)
-    results      <- .compute_twoway_stats(boot_samples, obs_estimates, kd, alpha)
+    results      <- .compute_twoway_stats(boot_samples, obs_estimates, kd, alpha, crit_df)
     n_fail       <- out_G$n_fail + out_H$n_fail + out_GH$n_fail
     n_successful <- min(sum(complete.cases(boot_samples$G)),
                         sum(complete.cases(boot_samples$H)),
@@ -424,19 +520,39 @@ bootmakr <- function(formula,
     n_clust      <- resample_info$n_clust
     method       <- "percentile"
   }
-  results <- .attach_r2(results, bench_strength, n_kd)
+  results <- .attach_r2(results, bench_strength, n_kd, r2dz.x, r2yz.dx,
+                        bounds_row, reduce)
 
   # ---- Robustness value (does not depend on the benchmark or on kd) ----
-  robustness <- .robustness(fit_orig, treat, q, alpha, reduce, boot_base, is_twoway)
+  robustness <- .robustness(fit_orig, treat, q, alpha, reduce, boot_base, is_twoway,
+                            crit_df)
 
   # ---- Breakdown kd: where the bootstrap test stops rejecting ----
   breakdown <- .breakdown(fit_orig, treat, alpha, reduce, kd, ky, bench_idx,
-                          bench_strength, boot_base, boot_bench, is_twoway)
+                          bench_strength, boot_base, boot_bench, is_twoway,
+                          crit_df)
+
+  # ---- Standard errors side by side, and the robust-to-conventional ratio ----
+  # Descriptive companions of the table: none of them draws random numbers
+  # or changes anything above.
+  se_groups <- .se_groups(fit_orig, cluster_list, nrow(data))
+  bench_reestimated <- !isTRUE(fix_benchmark) && !is.na(bench_idx) &&
+    bench_strength$type %in% c("single", "group")
+  se_compare <- tryCatch(
+    .se_compare(fit_orig, treat, results, se_groups, boot_base, reduce,
+                is_twoway, bench_reestimated, !is.null(strata_vec),
+                if (is.character(cluster)) cluster else NULL),
+    error = function(e) NULL)
+  se_ratio <- tryCatch(
+    .se_ratio(fit_orig, treat, se_groups, benchmark_covariates,
+              gbenchmark_covariates, if (is.character(cluster)) cluster else NULL),
+    error = function(e) NULL)
 
   conv_out <- NULL
   if (conv_opts$do_converge) {
     conv_out <- if (is_twoway) {
-      .convergence_diagnostics_twoway(boot_samples, obs_estimates[1], alpha, conv_opts)
+      .convergence_diagnostics_twoway(boot_samples, obs_estimates[1], alpha, conv_opts,
+                                      crit_df)
     } else {
       .convergence_diagnostics(boot_samples[, 1], obs_estimates[1], conv_opts)
     }
@@ -450,6 +566,13 @@ bootmakr <- function(formula,
       boot_bench    = boot_bench,
       robustness    = robustness,
       breakdown     = breakdown,
+      se_compare    = se_compare,
+      se_ratio      = se_ratio,
+      fix_benchmark = isTRUE(fix_benchmark),
+      weights_reestimated = !is.null(weight_fun),
+      twoway_crit   = if (is_twoway) twoway_crit else NULL,
+      crit_df       = crit_df,
+      reduce        = reduce,
       convergence   = conv_out,
       call          = cl,
       method        = method,
@@ -751,9 +874,15 @@ bootmakr <- function(formula,
 }
 
 #' Attach the implied r2dz.x / r2yz.dx and the impact of each kd row to the
-#' results table (first benchmark's rows, matching the adjusted estimates).
+#' results table. The rows are those the adjusted estimates come from: with
+#' single benchmarks .get_adjusted_estimates() lines up the manual bound(s)
+#' first, then the benchmarks with kd varying within benchmark, and takes
+#' the first n_kd rows of that list, or row `bounds_row` with a single kd.
+#' Up to 0.4.0.9000 of 2026-11-25 the first benchmark's rows were attached
+#' whatever `bounds_row` said and whether or not a manual bound came first.
 #' @noRd
-.attach_r2 <- function(results, bs, n_kd) {
+.attach_r2 <- function(results, bs, n_kd, r2dz.x = NULL, r2yz.dx = NULL,
+                       bounds_row = 1, reduce = TRUE) {
   results$r2dz.x  <- NA_real_
   results$r2yz.dx <- NA_real_
   results$impact  <- NA_real_
@@ -763,6 +892,18 @@ bootmakr <- function(formula,
     results$r2dz.x  <- imp$r2dz.x[1]
     results$r2yz.dx <- imp$r2yz.dx[1]
     results$impact  <- imp$impact[1]
+  } else if (identical(bs$type, "single")) {
+    all <- imp[, c("r2dz.x", "r2yz.dx", "impact")]
+    if (!is.null(r2dz.x)) {
+      r2y <- if (is.null(r2yz.dx)) r2dz.x else r2yz.dx
+      all <- rbind(data.frame(r2dz.x = r2dz.x, r2yz.dx = r2y,
+                              impact = .impact(r2dz.x, r2y, bs$r_yd.x, reduce)$impact),
+                   all)
+    }
+    idx <- if (n_kd > 1) seq_len(n_kd) else as.integer(bounds_row)
+    results$r2dz.x  <- all$r2dz.x[idx]
+    results$r2yz.dx <- all$r2yz.dx[idx]
+    results$impact  <- all$impact[idx]
   } else if (nrow(imp) >= n_kd) {
     results$r2dz.x  <- imp$r2dz.x[seq_len(n_kd)]
     results$r2yz.dx <- imp$r2yz.dx[seq_len(n_kd)]
@@ -955,7 +1096,8 @@ utils::globalVariables(".bootmakr_w")
                                 gbenchmark_covariates, kd, ky, q, alpha,
                                 r2dz.x, r2yz.dx, bound_label, reduce,
                                 bounds_row, bench_idx = NA_integer_,
-                                show_progress, label = NULL) {
+                                show_progress, label = NULL,
+                                weight_fun = NULL, base_fixed = NULL) {
   n_kd     <- length(kd)
   boot_mat <- matrix(NA_real_, nrow = reps, ncol = n_kd)
   colnames(boot_mat) <- paste0("kd_", kd)
@@ -984,15 +1126,23 @@ utils::globalVariables(".bootmakr_w")
     # guarded separately: a replicate in which only the benchmark bound fails
     # (kd too large for that resample) still has a coefficient and a scale,
     # and these are all the robustness value needs.
-    fit_b <- tryCatch(.fit_lm(formula, d_boot, weight_vec[boot_idx]),
-                      error = function(e) NULL)
+    # Weights: resampled with their units, or re-estimated on the resample
+    # when `weights` is a function. A resample on which that function fails
+    # is a failed replication.
+    w_ok <- TRUE
+    w_b  <- if (is.null(weight_fun)) weight_vec[boot_idx] else
+      tryCatch(.call_weight_fun(weight_fun, d_boot),
+               error = function(e) { w_ok <<- FALSE; NULL })
+    fit_b <- if (!w_ok) NULL else
+      tryCatch(.fit_lm(formula, d_boot, w_b), error = function(e) NULL)
     if (!is.null(fit_b)) {
       base_mat[b, ] <- tryCatch(.coef_scale(fit_b, treat),
                                 error = function(e) c(NA_real_, NA_real_))
       # The benchmark's partial R2s are computed once here and handed on, so
       # that they are kept even when the bound at the requested kd fails.
-      bench_b <- tryCatch(
-        .bench_base(fit_b, d_boot, formula, treat, weight_vec[boot_idx],
+      # With fix_benchmark they are those of the original fit throughout.
+      bench_b <- if (!is.null(base_fixed)) base_fixed else tryCatch(
+        .bench_base(fit_b, d_boot, formula, treat, w_b,
                     benchmark_covariates, gbenchmark_covariates),
         error = function(e) NULL)
       if (!is.null(bench_b) && !is.na(bench_idx) &&
@@ -1000,7 +1150,7 @@ utils::globalVariables(".bootmakr_w")
         bench_mat[b, ] <- c(bench_b$r2dxj.x[bench_idx], bench_b$r2yxj.dx[bench_idx])
       boot_mat[b, ] <- tryCatch(
         .get_adjusted_estimates(
-          fit_b, d_boot, formula, treat, weight_vec[boot_idx],
+          fit_b, d_boot, formula, treat, w_b,
           benchmark_covariates, gbenchmark_covariates,
           kd, ky, q, alpha, r2dz.x, r2yz.dx, bound_label, reduce, bounds_row,
           base = bench_b
@@ -1041,9 +1191,10 @@ utils::globalVariables(".bootmakr_w")
 # If V_2way < 0 (possible in small samples) we fall back to
 # max(Var_G, Var_H) with a warning -- a conservative scalar analogue of the
 # eigenvalue truncation used in the multivariate case.
-.compute_twoway_stats <- function(boot_samples, obs_estimates, kd, alpha) {
+.compute_twoway_stats <- function(boot_samples, obs_estimates, kd, alpha,
+                                  crit_df = Inf) {
   n_kd   <- length(kd)
-  z_crit <- qnorm(1 - alpha / 2)
+  z_crit <- .crit(alpha, crit_df)
   results <- data.frame(kd = kd, estimate = obs_estimates,
                         se = NA_real_, ci_lower = NA_real_,
                         ci_upper = NA_real_, pvalue = NA_real_,
@@ -1073,7 +1224,7 @@ utils::globalVariables(".bootmakr_w")
     results$ci_lower[i] <- est - z_crit * se_2
     results$ci_upper[i] <- est + z_crit * se_2
     z_stat <- est / se_2
-    results$pvalue[i]   <- 2 * pnorm(-abs(z_stat))
+    results$pvalue[i]   <- .pval2(z_stat, crit_df)
     results$var_G[i]    <- var_G
     results$var_H[i]    <- var_H
     results$var_GH[i]   <- var_GH
@@ -1120,7 +1271,8 @@ utils::globalVariables(".bootmakr_w")
 # rep count using the same V_G + V_H - V_GH formula as the headline result.
 # The intersection bootstrap distribution is exposed as boot_vals so the
 # existing convergence plot can draw a histogram.
-.convergence_diagnostics_twoway <- function(boot_samples, obs_estimate, alpha, opts) {
+.convergence_diagnostics_twoway <- function(boot_samples, obs_estimate, alpha, opts,
+                                            crit_df = Inf) {
   vG  <- boot_samples$G[,  1]
   vH  <- boot_samples$H[,  1]
   vGH <- boot_samples$GH[, 1]
@@ -1137,7 +1289,7 @@ utils::globalVariables(".bootmakr_w")
     if (!is.finite(v2) || v2 < 0) v2 <- max(v_G, v_H, na.rm = TRUE)
     se   <- sqrt(v2)
     conv_df$se[j]     <- se
-    conv_df$pvalue[j] <- 2 * pnorm(-abs(obs_estimate / se))
+    conv_df$pvalue[j] <- .pval2(obs_estimate / se, crit_df)
   }
   thr <- opts$threshold; high <- conv_df$reps >= thr
   se_hi <- if (any(high) && sum(high) > 1) conv_df$se[high] else NA
@@ -1323,13 +1475,14 @@ utils::globalVariables(".bootmakr_w")
 #' value, the variances taken over the replicates that have a bound at that
 #' kd (at least 10 in each of the three bootstraps).
 #' @noRd
-.breakdown_twoway <- function(base_list, bench_list, obs, obs_bench, alpha) {
+.breakdown_twoway <- function(base_list, bench_list, obs, obs_bench, alpha,
+                              crit_df = Inf) {
   out <- list(kd = NA_real_, n_used = NA_integer_, n_reps = NA_integer_, note = NULL)
   dims <- c("G", "H", "GH")
   adj  <- function(d, k) .adj_kd(base_list[[d]][, "estimate"], base_list[[d]][, "scale"],
                                  bench_list[[d]][, 1], bench_list[[d]][, 2], k)
   out$n_reps <- min(vapply(dims, function(d) sum(is.finite(adj(d, 0))), integer(1)))
-  z_crit <- qnorm(1 - alpha / 2)
+  z_crit <- .crit(alpha, crit_df)
   h <- function(k) {
     v <- vapply(dims, function(d) {
       a <- adj(d, k); a <- a[is.finite(a)]
@@ -1379,7 +1532,8 @@ utils::globalVariables(".bootmakr_w")
 #' Breakdown kd of the benchmark the table refers to
 #' @noRd
 .breakdown <- function(fit, treat, alpha, reduce, kd, ky, bench_idx,
-                       bench_strength, boot_base, boot_bench, is_twoway) {
+                       bench_strength, boot_base, boot_bench, is_twoway,
+                       crit_df = Inf) {
   out <- list(kd = NA_real_, kd_conventional = NA_real_, kd_limit = NA_real_,
               benchmark = NA_character_, alpha = alpha,
               method = if (is_twoway) "cgm_twoway" else "percentile",
@@ -1406,7 +1560,7 @@ utils::globalVariables(".bootmakr_w")
     .breakdown_conventional(obs, obs_bench, fit$df.residual, alpha),
     error = function(e) NA_real_)
   res <- tryCatch(
-    if (is_twoway) .breakdown_twoway(boot_base, boot_bench, obs, obs_bench, alpha)
+    if (is_twoway) .breakdown_twoway(boot_base, boot_bench, obs, obs_bench, alpha, crit_df)
     else           .breakdown_percentile(boot_base, boot_bench, alpha, out$kd_limit),
     error = function(e) list(kd = NA_real_, n_used = NA_integer_, n_reps = NA_integer_,
                              note = "The breakdown kd could not be computed."))
@@ -1510,12 +1664,12 @@ utils::globalVariables(".bootmakr_w")
 #' the main table, without its warning). A grid locates the first crossing;
 #' uniroot then refines it inside that bracket.
 #' @noRd
-.bootstrap_rv_twoway <- function(base_list, obs, alpha) {
+.bootstrap_rv_twoway <- function(base_list, obs, alpha, crit_df = Inf) {
   bs <- lapply(base_list, function(m)
     m[is.finite(m[, 1]) & is.finite(m[, 2]) & m[, 2] > 0, , drop = FALSE])
   if (any(vapply(bs, nrow, integer(1)) < 10) || !all(is.finite(obs)))
     return(NA_real_)
-  z_crit <- qnorm(1 - alpha / 2)
+  z_crit <- .crit(alpha, crit_df)
   h <- function(r) {
     v  <- vapply(bs, function(m) var(.adj_at(m[, 1], m[, 2], r)), numeric(1))
     v2 <- v[["G"]] + v[["H"]] - v[["GH"]]
@@ -1541,7 +1695,8 @@ utils::globalVariables(".bootmakr_w")
 #' is the only null hypothesis the bootstrap table tests (adjusted
 #' estimate = 0, omitted variable pulling the estimate towards zero).
 #' @noRd
-.robustness <- function(fit, treat, q, alpha, reduce, boot_base, is_twoway) {
+.robustness <- function(fit, treat, q, alpha, reduce, boot_base, is_twoway,
+                        crit_df = Inf) {
   sm_rv <- function(a) tryCatch(
     as.numeric(sensemakr::robustness_value(fit, covariates = treat, q = q, alpha = a)),
     error = function(e) NA_real_)
@@ -1555,7 +1710,7 @@ utils::globalVariables(".bootmakr_w")
     note <- "The bootstrap robustness value is available for q = 1 only."
   } else {
     rv_boot <- tryCatch(
-      if (is_twoway) .bootstrap_rv_twoway(boot_base, obs, alpha)
+      if (is_twoway) .bootstrap_rv_twoway(boot_base, obs, alpha, crit_df)
       else           .bootstrap_rv_percentile(boot_base, alpha),
       error = function(e) NA_real_)
     if (is.na(rv_boot))
@@ -1571,7 +1726,7 @@ utils::globalVariables(".bootmakr_w")
        note = note)
 }
 
-.print_robustness <- function(rb) {
+.print_robustness <- function(rb, crit_df = Inf) {
   if (is.null(rb)) return(invisible(NULL))
   pct <- format(rb$alpha * 100)
   f   <- function(v) if (is.na(v)) "    NA" else formatC(v, format = "f", digits = 4)
@@ -1583,13 +1738,315 @@ utils::globalVariables(".bootmakr_w")
   val <- c(f(rb$rv_q), f(rb$rv_qa), f(rb$rv_qa_boot))
   cat(sprintf("  %-*s  %s\n", max(nchar(lab)), lab, val), sep = "")
   cat("(partial R2 of the omitted variable with the treatment and with the outcome;\n",
-      if (identical(rb$method, "cgm_twoway"))
+      if (identical(rb$method, "cgm_twoway") && is.finite(crit_df))
+        " bootstrap: smallest strength at which the two-way t-test stops rejecting)\n"
+      else if (identical(rb$method, "cgm_twoway"))
         " bootstrap: smallest strength at which the two-way z-test stops rejecting)\n"
       else
         " bootstrap: smallest strength at which the bootstrap p-value reaches alpha)\n",
       sep = "")
   if (!is.null(rb$note)) cat("Note: ", rb$note, "\n", sep = "")
   invisible(NULL)
+}
+
+
+# ==============================================================================
+# Critical values and weight functions
+# ==============================================================================
+
+#' Two-sided critical value and p-value of the two-way test: normal, or t
+#' when `df` is finite.
+#' @noRd
+.crit  <- function(alpha, df = Inf)
+  if (is.finite(df)) stats::qt(1 - alpha / 2, df = df) else qnorm(1 - alpha / 2)
+.pval2 <- function(stat, df = Inf)
+  if (is.finite(df)) 2 * stats::pt(-abs(stat), df = df) else 2 * pnorm(-abs(stat))
+
+#' Call a user-supplied weight function on a data set and check what it
+#' returns.
+#' @noRd
+.call_weight_fun <- function(fun, data) {
+  w <- fun(data)
+  if (!is.numeric(w) || length(w) != nrow(data) || anyNA(w) || any(w < 0))
+    stop("A `weights` function must return one non-negative number per row of ",
+         "the data it is given.", call. = FALSE)
+  as.numeric(w)
+}
+
+
+# ==============================================================================
+# Standard errors side by side, and the robust-to-conventional ratio
+# ==============================================================================
+# The table of adjusted estimates rests on the bootstrap. Two closed-form
+# standard errors exist for the same adjusted estimate and are reported next
+# to it: sensemakr's, built on the conventional OLS standard error, and the
+# rescaled robust standard error of Wainstein and Hazlett (2026, Option 3 and
+# Appendix B.2). Both refer to the regression that would include the omitted
+# variable; the bootstrap refers to the sampling variability of the adjusted
+# estimate. The robust standard errors are computed here from the scores of
+# the treatment coefficient (Frisch-Waugh-Lovell), so that no further
+# package is needed: HC1 without clusters, CR1 with one cluster variable,
+# and the Cameron-Gelbach-Miller combination of three CR1 variances with two.
+
+#' Cluster ids (1..G) of the rows lm() used, one vector per cluster
+#' dimension, plus their intersection with two dimensions. NULL without
+#' clusters.
+#' @noRd
+.se_groups <- function(fit, cluster_list, n_data) {
+  if (is.null(cluster_list)) return(NULL)
+  dropped <- as.integer(fit$na.action)
+  keep    <- if (length(dropped)) setdiff(seq_len(n_data), dropped) else seq_len(n_data)
+  g <- lapply(cluster_list, function(v) { v <- v[keep]; match(v, unique(v)) })
+  if (length(g) == 2) {
+    both   <- paste(g[[1]], g[[2]])
+    g[[3]] <- match(both, unique(both))
+  }
+  g
+}
+
+#' Conventional standard error of the treatment coefficient and the pieces
+#' its sandwich variances are built from: the score of each observation
+#' (weight x residualised treatment x outcome residual) and the weighted sum
+#' of squares of the residualised treatment.
+#' @noRd
+.se_core <- function(y, X, w, treat) {
+  wfit <- function(X, y) if (is.null(w)) stats::lm.fit(X, y) else stats::lm.wfit(X, y, w)
+  f    <- wfit(X, y)
+  ww   <- if (is.null(w)) rep(1, length(y)) else w
+  n    <- sum(ww > 0); k <- f$rank; df <- n - k
+  dres <- wfit(X[, colnames(X) != treat, drop = FALSE], X[, treat])$residuals
+  den  <- sum(ww * dres^2)
+  list(se_conv = sqrt(sum(ww * f$residuals^2) / df / den),
+       score = ww * dres * f$residuals, den = den, n = n, k = k, df = df)
+}
+
+#' Robust standard error of the treatment coefficient from .se_core():
+#' HC1 (no clusters), CR1 (one cluster variable) or two-way CR1 by inclusion
+#' and exclusion (two). `k_extra` adds regressors to the finite-sample
+#' correction, as when an omitted variable is thought of as included. NA if
+#' the two-way variance is not positive.
+#' @noRd
+.robust_se <- function(core, groups, k_extra = 0) {
+  n <- core$n; p <- core$k + k_extra
+  if (n - p <= 0) return(NA_real_)
+  cr <- function(g) {
+    G <- max(g)
+    if (G < 2) return(NA_real_)
+    sum(rowsum(core$score, g)^2) / core$den^2 * G / (G - 1) * (n - 1) / (n - p)
+  }
+  v <- if (is.null(groups)) sum(core$score^2) / core$den^2 * n / (n - p)
+       else if (length(groups) == 1) cr(groups[[1]])
+       else cr(groups[[1]]) + cr(groups[[2]]) - cr(groups[[3]])
+  if (!is.finite(v) || v <= 0) NA_real_ else sqrt(v)
+}
+
+.robust_label <- function(groups, cluster_names) {
+  if (is.null(groups)) return("HC1")
+  base <- if (length(groups) == 1) "CR1" else "two-way CR1"
+  if (is.null(cluster_names)) base else
+    sprintf("%s by %s", base, paste(cluster_names, collapse = " and "))
+}
+
+#' sensemakr's adjusted estimate written in the coefficient, its scale and
+#' the bias factor bf = sqrt(r2yz.dx * r2dz.x / (1 - r2dz.x)); `bf` may be a
+#' vector, in which case a matrix with one column per value is returned.
+#' @noRd
+.adj_bf <- function(est, scale, bf, reduce = TRUE) {
+  s <- if (isTRUE(reduce)) -1 else 1
+  if (length(bf) == 1) sign(est) * (abs(est) + s * scale * bf)
+  else sign(est) * (abs(est) + s * outer(scale, bf))
+}
+
+#' Bootstrap standard error of the adjusted estimate for an omitted variable
+#' of fixed strength, from the stored coefficient and scale of every
+#' replicate: what the table reports when the strength is not re-estimated.
+#' @noRd
+.fixed_strength_se <- function(boot_base, bf, reduce, is_twoway) {
+  if (!is.finite(bf)) return(NA_real_)
+  one <- function(m) {
+    a <- .adj_bf(m[, 1], m[, 2], bf, reduce); a <- a[is.finite(a)]
+    if (length(a) < 10) NA_real_ else var(a)
+  }
+  if (!is_twoway) return(sqrt(one(boot_base)))
+  v <- vapply(boot_base, one, numeric(1))
+  if (anyNA(v)) return(NA_real_)
+  v2 <- v[["G"]] + v[["H"]] - v[["GH"]]
+  if (!is.finite(v2) || v2 < 0) v2 <- max(v[["G"]], v[["H"]])
+  sqrt(v2)
+}
+
+#' Standard errors of the adjusted estimate, one row per kd
+#' @noRd
+.se_compare <- function(fit, treat, results, groups, boot_base, reduce,
+                        is_twoway, bench_reestimated, has_strata, cluster_names) {
+  core <- .se_core(stats::model.response(stats::model.frame(fit)),
+                   model.matrix(fit), fit$weights, treat)
+  dof  <- fit$df.residual
+  r2d  <- results$r2dz.x; r2y <- results$r2yz.dx
+  ok   <- is.finite(r2d) & is.finite(r2y) & r2d < 1
+  shrink <- ifelse(ok, sqrt((1 - r2y) / (1 - r2d)), NA_real_)
+  bf     <- ifelse(ok, sqrt(r2y * r2d / (1 - r2d)), NA_real_)
+  tab <- data.frame(
+    kd              = results$kd,
+    bootstrap       = results$se,
+    bootstrap_fixed = vapply(bf, function(b)
+      .fixed_strength_se(boot_base, b, reduce, is_twoway), numeric(1)),
+    conventional    = shrink * core$se_conv * sqrt(dof / (dof - 1)),
+    robust          = shrink * .robust_se(core, groups, k_extra = 1))
+  notes <- c(
+    if (has_strata) "The closed-form robust standard error ignores the strata.",
+    if (length(groups) == 3) paste(
+      "Wainstein and Hazlett (2026) give the closed form for one cluster",
+      "variable; its use with two-way clustering is an extension made here."))
+  list(table = tab,
+       unadjusted = c(conventional = core$se_conv, robust = .robust_se(core, groups)),
+       robust_type = .robust_label(groups, cluster_names),
+       bench_reestimated = bench_reestimated,
+       note = if (length(notes)) paste(notes, collapse = " ") else NULL)
+}
+
+#' Ratio of the robust to the conventional standard error of the treatment
+#' coefficient, and how much it changes when each benchmark is taken out of
+#' the regression and restored (Acedanski, 2026, Section 6.2). `cap` is the
+#' ratio plus the largest positive change. Benchmarks are matched to columns
+#' of the model matrix; a grouped benchmark is removed as one block.
+#' @noRd
+.se_ratio <- function(fit, treat, groups, benchmark_covariates,
+                      gbenchmark_covariates, cluster_names) {
+  y <- stats::model.response(stats::model.frame(fit))
+  X <- model.matrix(fit); w <- fit$weights
+  ratio <- function(X) {
+    core <- .se_core(y, X, w, treat)
+    c(.robust_se(core, groups), core$se_conv)
+  }
+  full <- ratio(X)
+  out  <- list(omega = full[1] / full[2], se_conventional = full[2],
+               se_robust = full[1],
+               robust_type = .robust_label(groups, cluster_names),
+               benchmarks = NULL, cap = NA_real_)
+  pool <- if (!is.null(gbenchmark_covariates)) list(gbenchmark_covariates)
+          else as.list(benchmark_covariates)
+  if (length(pool) == 0) return(out)
+  without <- vapply(pool, function(b) {
+    keep <- !(colnames(X) %in% b)
+    if (all(keep)) return(NA_real_)
+    r <- ratio(X[, keep, drop = FALSE])
+    r[1] / r[2]
+  }, numeric(1))
+  out$benchmarks <- data.frame(
+    benchmark = vapply(pool, paste, character(1), collapse = " + "),
+    omega_without = without, change = out$omega - without,
+    stringsAsFactors = FALSE)
+  ch <- out$benchmarks$change[is.finite(out$benchmarks$change)]
+  if (length(ch) && is.finite(out$omega)) out$cap <- out$omega + max(0, ch)
+  out
+}
+
+.print_se_compare <- function(sc, labels) {
+  if (is.null(sc)) return(invisible(NULL))
+  f <- function(v) ifelse(is.na(v), "NA", formatC(v, format = "f", digits = 6))
+  tab <- data.frame(Bootstrap = f(sc$table$bootstrap),
+                    check.names = FALSE, stringsAsFactors = FALSE)
+  if (isTRUE(sc$bench_reestimated))
+    tab[["Benchmark fixed"]] <- f(sc$table$bootstrap_fixed)
+  tab[["Conventional"]] <- f(sc$table$conventional)
+  tab[["Closed-form"]]  <- f(sc$table$robust)
+  rownames(tab) <- make.unique(labels, sep = " #")
+  cat(sprintf("\nStandard errors of the adjusted estimate (closed form: %s):\n",
+              sc$robust_type))
+  print(tab, right = TRUE, quote = FALSE)
+  txt <- paste0(
+    "(Bootstrap: as in the table above. ",
+    if (isTRUE(sc$bench_reestimated)) paste0(
+      "Benchmark fixed: the bootstrap with the strength of the omitted ",
+      "variable held at its value in the original fit, computed from the ",
+      "same replicates. "),
+    "Conventional: sensemakr's adjusted standard error. Closed-form: the ",
+    "robust standard error of the original fit, rescaled as in Wainstein and ",
+    "Hazlett (2026) on the assumption that the omitted variable shrinks every ",
+    "residual by the same proportion. The last two refer to the regression ",
+    "that would include the omitted variable, the bootstrap to the sampling ",
+    "variability of the adjusted estimate.)")
+  cat(strwrap(txt, width = 78), sep = "\n")
+  if (!is.null(sc$note)) cat(strwrap(paste("Note:", sc$note), width = 78), sep = "\n")
+  invisible(NULL)
+}
+
+.print_se_ratio <- function(sr, treat) {
+  if (is.null(sr) || !is.finite(sr$omega)) return(invisible(NULL))
+  f <- function(v, flag = "") if (is.na(v)) "NA" else
+    formatC(v, format = "f", digits = 4, flag = flag)
+  cat(sprintf("\nRobust-to-conventional ratio of the standard error of %s (%s): %s\n",
+              treat, sr$robust_type, f(sr$omega)))
+  b <- sr$benchmarks
+  if (!is.null(b)) for (i in seq_len(nrow(b)))
+    cat(sprintf("  without %s: %s (change when it is restored: %s)\n",
+                b$benchmark[i], f(b$omega_without[i]), f(b$change[i], "+")))
+  cat(strwrap(paste0(
+    "(Unadjusted regression. A ratio away from one means that robust and ",
+    "conventional inference already differ before any omitted variable is ",
+    "considered. The change shows how far restoring an observed covariate ",
+    "moves the ratio, a yardstick for what an omitted variable might do; ",
+    "see Acedanski, 2026.)"), width = 78), sep = "\n")
+  invisible(NULL)
+}
+
+
+# ==============================================================================
+# Fixed-strength curve and contour surface
+# ==============================================================================
+# For an omitted variable of given strength the adjusted estimate depends on
+# the two partial R2s only through the bias factor
+# bf = sqrt(r2yz.dx * r2dz.x / (1 - r2dz.x)). The bootstrap interval and
+# p-value at that strength, held fixed across replicates, follow from the
+# stored coefficient and scale of every replicate.
+
+#' Adjusted estimate, bootstrap interval and p-value at each bias factor
+#' @noRd
+.strength_curve <- function(x, bf) {
+  alpha  <- x$alpha
+  reduce <- if (is.null(x$reduce)) TRUE else x$reduce
+  df     <- if (is.null(x$crit_df)) Inf else x$crit_df
+  est    <- as.numeric(.adj_bf(x$robustness$estimate, x$robustness$scale, bf, reduce))
+  na     <- rep(NA_real_, length(bf))
+  amat   <- function(m) {
+    ok <- is.finite(m[, 1]) & is.finite(m[, 2])
+    if (sum(ok) < 10) return(NULL)
+    a <- .adj_bf(m[ok, 1], m[ok, 2], bf, reduce)
+    if (is.matrix(a)) a else matrix(a, ncol = 1)
+  }
+  if (identical(x$method, "cgm_twoway")) {
+    v <- lapply(x$boot_base, function(m) {
+      a <- amat(m); if (is.null(a)) na else apply(a, 2, var) })
+    v2  <- v$G + v$H - v$GH
+    neg <- is.finite(v2) & v2 < 0
+    v2[neg] <- pmax(v$G, v$H)[neg]
+    se  <- sqrt(v2); cr <- .crit(alpha, df)
+    return(data.frame(bf = bf, estimate = est, lower = est - cr * se,
+                      upper = est + cr * se, pvalue = .pval2(est / se, df)))
+  }
+  a <- amat(x$boot_base)
+  if (is.null(a))
+    return(data.frame(bf = bf, estimate = est, lower = na, upper = na, pvalue = na))
+  qs <- apply(a, 2, quantile, probs = c(alpha / 2, 1 - alpha / 2), names = FALSE)
+  data.frame(bf = bf, estimate = est, lower = qs[1, ], upper = qs[2, ],
+             pvalue = 2 * pmin(colMeans(a <= 0), colMeans(a >= 0)))
+}
+
+#' Surface over a grid of the two partial R2s: `value` is "estimate",
+#' "pvalue" or "ci", the limit of the interval nearer zero.
+#' @noRd
+.contour_surface <- function(x, r2dz, r2yz, value = "ci") {
+  bfg <- sqrt(outer(r2dz / (1 - r2dz), r2yz))
+  bfs <- seq(0, max(bfg), length.out = 400)
+  cv  <- .strength_curve(x, bfs)
+  col <- switch(value, estimate = "estimate", pvalue = "pvalue",
+                ci = if (isTRUE(cv$estimate[1] < 0)) "upper" else "lower")
+  if (all(is.na(cv[[col]])))
+    stop("Too few usable replicates for a contour plot.", call. = FALSE)
+  z <- matrix(stats::approx(bfs, cv[[col]], xout = as.vector(bfg), rule = 2)$y,
+              nrow = length(r2dz))
+  list(r2dz.x = r2dz, r2yz.dx = r2yz, z = z, which = col)
 }
 
 
@@ -1602,7 +2059,9 @@ utils::globalVariables(".bootmakr_w")
 #' Prints the table of bias-adjusted estimates with bootstrap standard
 #' errors, confidence intervals and p-values (one row per \code{kd}),
 #' followed by the descriptive benchmark-strength block, the breakdown kd,
-#' the robustness values and, if requested, the convergence diagnostics.
+#' the robustness values, the standard errors of the adjusted estimate
+#' side by side, the ratio of the robust to the conventional standard
+#' error and, if requested, the convergence diagnostics.
 #'
 #' @param x An object of class \code{"bootmakr"}, as returned by
 #'   \code{\link{bootmakr}}.
@@ -1635,6 +2094,11 @@ print.bootmakr <- function(x, ...) {
 
   cat(sprintf("Benchmark: %s | kd = %s, ky = %s\n",
               x$bench_label, paste(x$kd, collapse = " "), paste(x$ky, collapse = " ")))
+  if (isTRUE(x$fix_benchmark))
+    cat("Benchmark strength held at its value in the original fit (fix_benchmark = TRUE)\n")
+  if (isTRUE(x$weights_reestimated))
+    cat("Weights re-estimated in every replication\n")
+  crit_df <- if (is.null(x$crit_df)) Inf else x$crit_df
 
   alpha  <- x$alpha
   ci_pct <- round((1 - alpha) * 100)
@@ -1663,11 +2127,17 @@ print.bootmakr <- function(x, ...) {
   colnames(tab)[3] <- paste0(alpha / 2 * 100, "%")
   colnames(tab)[4] <- paste0((1 - alpha / 2) * 100, "%")
 
-  ci_label <- if (is_twoway) "normal-approx" else "percentile"
+  ci_label <- if (!is_twoway) "percentile" else if (is.finite(crit_df)) "t-approx"
+              else "normal-approx"
   cat(sprintf("\nAdjusted estimates (%s %d%% CI):\n", ci_label, ci_pct))
   print(tab, right = TRUE, quote = FALSE)
   cat("---\nSignif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n")
   if (is_twoway) {
+    if (is.finite(crit_df))
+      cat(sprintf(paste("(H0: adjusted estimate = 0; SE = sqrt(V_G + V_H - V_GH),",
+                        "CI = est +/- t*SE and p-value from\n a t distribution with",
+                        "min(G, H) - 1 = %d degrees of freedom)\n"), as.integer(crit_df)))
+    else
     cat("(H0: adjusted estimate = 0; SE = sqrt(V_G + V_H - V_GH),",
         "CI = est +/- z*SE, p = 2*(1 - Phi(|z|)))\n")
     if (any(res$var_neg_fix, na.rm = TRUE))
@@ -1686,7 +2156,11 @@ print.bootmakr <- function(x, ...) {
 
   .print_breakdown(x$breakdown)
 
-  .print_robustness(x$robustness)
+  .print_robustness(x$robustness, crit_df)
+
+  .print_se_compare(x$se_compare, labels)
+
+  .print_se_ratio(x$se_ratio, x$treat)
 
   if (!is.null(x$convergence)) .print_convergence(x$convergence)
   invisible(x)
@@ -1733,16 +2207,30 @@ print.bootmakr <- function(x, ...) {
 #'       \code{bootmakr()}).}
 #'     \item{\code{"histogram"}}{the bootstrap distribution of the adjusted
 #'       estimate with the original estimate marked.}
+#'     \item{\code{"contour"}}{contours, over the two partial R2 of the
+#'       omitted variable, of the limit of the bootstrap confidence interval
+#'       that lies nearer zero, computed from the stored replicates with that
+#'       strength held fixed across replicates. The dashed line marks where
+#'       the bootstrap test stops rejecting; on the diagonal it passes through
+#'       the bootstrap robustness value. The benchmark of the table is marked,
+#'       but when the benchmark is re-estimated in every replicate the
+#'       interval in the table differs from the one drawn here (see
+#'       \code{fix_benchmark} in \code{\link{bootmakr}}). Not chosen by
+#'       \code{"auto"}.}
 #'     \item{\code{"auto"}}{(default) \code{"convergence"} if diagnostics
 #'       are available, otherwise \code{"kd_sweep"} if several \code{kd}
 #'       values were used, otherwise \code{"histogram"}.}
 #'   }
 #' @param ... Further arguments; for \code{type = "histogram"},
-#'   \code{kd_idx} selects which \code{kd} value to show (default 1).
+#'   \code{kd_idx} selects which \code{kd} value to show (default 1);
+#'   for \code{type = "contour"}, \code{value} (\code{"ci"}, the default,
+#'   \code{"estimate"} or \code{"pvalue"}), \code{lim} and \code{lim.y} (upper
+#'   ends of the two axes), \code{grid} and \code{nlevels}.
 #' @return \code{x}, invisibly.
 #' @seealso \code{\link{bootmakr}}, \code{\link{print.bootmakr}}
 #' @export
-plot.bootmakr <- function(x, type = c("auto", "kd_sweep", "convergence", "histogram"), ...) {
+plot.bootmakr <- function(x, type = c("auto", "kd_sweep", "convergence", "histogram",
+                                      "contour"), ...) {
   type <- match.arg(type)
   if (type == "auto") {
     type <- if (!is.null(x$convergence)) "convergence"
@@ -1752,9 +2240,70 @@ plot.bootmakr <- function(x, type = c("auto", "kd_sweep", "convergence", "histog
   switch(type,
     kd_sweep    = .plot_kd_sweep(x, ...),
     convergence = .plot_convergence(x, ...),
-    histogram   = .plot_histogram(x, ...)
+    histogram   = .plot_histogram(x, ...),
+    contour     = .plot_contour(x, ...)
   )
   invisible(x)
+}
+
+.plot_contour <- function(x, value = c("ci", "estimate", "pvalue"),
+                          lim = NULL, lim.y = NULL, grid = 100, nlevels = 10, ...) {
+  value <- match.arg(value)
+  if (is.null(x$boot_base) || is.null(x$robustness))
+    stop("This object does not hold the replicates a contour plot needs.", call. = FALSE)
+  res <- x$results
+  pts <- is.finite(res$r2dz.x) & is.finite(res$r2yz.dx)
+  if (is.null(lim))   lim   <- min(max(0.4, 1.2 * res$r2dz.x[pts]), 0.99)
+  if (is.null(lim.y)) lim.y <- min(max(0.4, 1.2 * res$r2yz.dx[pts]), 1)
+  if (!(lim > 0 && lim < 1 && lim.y > 0 && lim.y <= 1))
+    stop("`lim` must lie between 0 and 1 (exclusive) and `lim.y` between 0 and 1.",
+         call. = FALSE)
+  s <- .contour_surface(x, seq(0, lim, length.out = grid),
+                        seq(0, lim.y, length.out = grid), value)
+  ci_pct <- round((1 - x$alpha) * 100)
+  how    <- if (identical(x$method, "cgm_twoway")) "two-way bootstrap" else "percentile bootstrap"
+  ttl <- switch(s$which,
+    estimate = "Adjusted estimate",
+    pvalue   = sprintf("P-value of the adjusted estimate (%s)", how),
+    lower    = sprintf("Lower limit of the %d%% interval (%s)", ci_pct, how),
+    upper    = sprintf("Upper limit of the %d%% interval (%s)", ci_pct, how))
+  old_par <- par(mar = c(6.5, 5, 3.6, 1.5)); on.exit(par(old_par))
+  xlab <- "Partial R2 of the omitted variable with the treatment"
+  ylab <- "Partial R2 of the omitted variable with the outcome"
+  zr   <- range(s$z, na.rm = TRUE)
+  if (zr[1] == zr[2]) {
+    # nothing to contour: the value is the same over the whole range
+    plot(NA, xlim = c(0, lim), ylim = c(0, lim.y), xlab = xlab, ylab = ylab,
+         main = ttl, las = 1, cex.lab = 1.05, cex.main = 1)
+    graphics::text(lim / 2, lim.y / 2,
+                   sprintf("Constant over this range: %s", format(zr[1], digits = 4)))
+  } else {
+    graphics::contour(s$r2dz.x, s$r2yz.dx, s$z, nlevels = nlevels, col = "gray35",
+                      xlab = xlab, ylab = ylab, main = ttl, las = 1,
+                      cex.lab = 1.05, cex.main = 1, ...)
+  }
+  # Where the test of the table stops rejecting: the bias factor of the
+  # bootstrap robustness value, traced over all pairs that share it
+  rv <- x$robustness$rv_qa_boot
+  if (isTRUE(is.finite(rv) && rv > 0 && rv < 1)) {
+    bf0 <- rv / sqrt(1 - rv)
+    xs  <- seq(lim / 2000, lim, length.out = 800)
+    graphics::lines(xs, bf0^2 * (1 - xs) / xs, col = "red", lwd = 2, lty = 2)
+    mtext(sprintf("Dashed line: from here on the bootstrap test is not significant at %s%%",
+                  format(x$alpha * 100)), side = 3, line = 0.25, cex = 0.75, col = "red")
+  }
+  points(0, 0, pch = 17, cex = 1.1)
+  if (any(pts)) {
+    lab <- if (all(is.na(res$kd[pts])) || identical(x$benchmark_strength$type, "manual"))
+      rep(x$bench_label, sum(pts)) else sprintf("%sx %s", format(res$kd[pts]), x$bench_label)
+    points(res$r2dz.x[pts], res$r2yz.dx[pts], pch = 23, bg = "navy", col = "navy", cex = 1.1)
+    graphics::text(res$r2dz.x[pts], res$r2yz.dx[pts], lab, pos = 4, cex = 0.75, col = "navy")
+  }
+  note <- "Strength of the omitted variable held fixed across replications."
+  if (isTRUE(x$se_compare$bench_reestimated))
+    note <- paste(note, "The table re-estimates the benchmark, so its interval differs.")
+  mtext(note, side = 1, line = 4.6, cex = 0.72)
+  invisible(s)
 }
 
 .plot_kd_sweep <- function(x, ...) {

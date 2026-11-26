@@ -3,6 +3,45 @@
 This version lives on the `experimental` branch. The released package on
 `master` is 0.4.0 and is not changed while the paper is under review.
 
+* New: **standard errors side by side**. After the robustness values
+  `print()` shows, for each `kd`, the bootstrap standard error of the table
+  next to three others: the bootstrap standard error with the benchmark's
+  strength held at its value in the original fit, computed from the same
+  replicates; `sensemakr`'s adjusted standard error; and the closed-form
+  robust standard error of Wainstein and Hazlett (2026, Option 3), which is
+  HC1 without clusters, CR1 with one cluster variable and, as an extension
+  made here, two-way CR1. The last two refer to the regression that would
+  include the omitted variable, the bootstrap to the sampling variability of
+  the adjusted estimate, so the columns need not agree. Stored in
+  `$se_compare`.
+* New: the **ratio of the robust to the conventional standard error** of the
+  treatment coefficient, and its change when each benchmark is taken out of
+  the regression and restored (Acedański, 2026, Section 6.2). Printed last
+  and stored in `$se_ratio`.
+* New argument `fix_benchmark`. With `TRUE` the benchmark's partial R² are
+  taken from the original fit in every replicate instead of being
+  re-estimated, so the omitted variable has the same strength throughout,
+  as in the bootstrap of Wainstein and Hazlett (2026). The table and the
+  breakdown kd then leave out the uncertainty about the benchmark.
+* New plot, `plot(x, type = "contour")`: contours of the limit of the
+  bootstrap interval nearer zero over the two partial R² of the omitted
+  variable, from the stored replicates, with a line where the bootstrap test
+  stops rejecting. The strength is held fixed across replicates, so at a
+  benchmark point the interval differs from the table unless
+  `fix_benchmark = TRUE`.
+* New argument `twoway_crit`. With `"t"` the two-way interval, p-value,
+  breakdown kd and bootstrap robustness value use a t distribution with
+  min(G, H) - 1 degrees of freedom instead of the normal. The default is
+  unchanged.
+* `weights` may be a function of the data. It is then called on every
+  resample, so the weights are re-estimated within replications (Option 1 of
+  Wainstein and Hazlett, 2026). Benchmarks are measured with those weights
+  and not with their semi-weights.
+* Fixed: with `bounds_row` other than 1, or with a manual R² supplied next
+  to a benchmark, the columns `r2dz.x`, `r2yz.dx` and `impact` of `$results`
+  described the first benchmark's bound and not the row the adjusted
+  estimate refers to. Adjusted estimates and their inference were not
+  affected. The released 0.4.0 has the same mislabelling.
 * New: the **breakdown kd**. After the benchmark-strength block `print()`
   reports the smallest `kd` (with `ky = kd`) at which the estimate is no
   longer significant at `alpha`, for the benchmark the table refers to:
@@ -50,7 +89,7 @@ This version lives on the `experimental` branch. The released package on
   freedom) in every replicate. The adjusted estimate at any strength of the
   omitted variable is a closed form in these two numbers.
 * Adjusted estimates, bootstrap draws and all other results are unchanged
-  for a given seed.
+  for a given seed, apart from the three columns named in the fix above.
 * With `weights`, a benchmark given through `benchmark_covariates` is now
   measured with the weights on both sides. Until now only the outcome model
   used them: the benchmark's partial R² with the treatment came from an

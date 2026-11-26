@@ -4,7 +4,11 @@
 \alias{plot.bootmakr}
 \title{Plot a bootmakr object}
 \usage{
-\method{plot}{bootmakr}(x, type = c("auto", "kd_sweep", "convergence", "histogram"), ...)
+\method{plot}{bootmakr}(
+  x,
+  type = c("auto", "kd_sweep", "convergence", "histogram", "contour"),
+  ...
+)
 }
 \arguments{
 \item{x}{An object of class \code{"bootmakr"}, as returned by
@@ -22,13 +26,24 @@ replications (requires \code{converge} in the call to
 \code{bootmakr()}).}
 \item{\code{"histogram"}}{the bootstrap distribution of the adjusted
 estimate with the original estimate marked.}
+\item{\code{"contour"}}{contours, over the two partial R2 of the omitted
+variable, of the limit of the bootstrap confidence interval that lies nearer
+zero, computed from the stored replicates with that strength held fixed across
+replicates. The dashed line marks where the bootstrap test stops rejecting; on
+the diagonal it passes through the bootstrap robustness value. The benchmark
+of the table is marked, but when the benchmark is re-estimated in every
+replicate the interval in the table differs from the one drawn here (see
+\code{fix_benchmark} in \code{\link{bootmakr}}). Not chosen by \code{"auto"}.}
 \item{\code{"auto"}}{(default) \code{"convergence"} if diagnostics
 are available, otherwise \code{"kd_sweep"} if several \code{kd}
 values were used, otherwise \code{"histogram"}.}
 }}
 
 \item{...}{Further arguments; for \code{type = "histogram"},
-\code{kd_idx} selects which \code{kd} value to show (default 1).}
+\code{kd_idx} selects which \code{kd} value to show (default 1);
+for \code{type = "contour"}, \code{value} (\code{"ci"}, the default,
+\code{"estimate"} or \code{"pvalue"}), \code{lim} and \code{lim.y} (upper ends
+of the two axes), \code{grid} and \code{nlevels}.}
 }
 \value{
 \code{x}, invisibly.

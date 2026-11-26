@@ -27,7 +27,9 @@ bootmakr(
   progress = TRUE,
   dots = 0,
   converge = FALSE,
-  verbose = FALSE
+  verbose = FALSE,
+  fix_benchmark = FALSE,
+  twoway_crit = c("normal", "t")
 )
 }
 \arguments{
@@ -82,7 +84,8 @@ two-way cluster bootstrap using the Cameron, Gelbach & Miller (2011)
 subtractive variance estimator: three bootstraps are run (on each
 dimension and on their intersection) and combined as
 \code{V = V_G + V_H - V_(G n H)}. CIs and p-values for the two-way case
-use a normal approximation \code{estimate +/- z * SE}. Two-way clustering
+use a normal approximation \code{estimate +/- z * SE}, or a t distribution
+with \code{twoway_crit = "t"}. Two-way clustering
 is incompatible with \code{strata}.}
 
 \item{strata, weights}{Column name or vector: strata for a stratified
@@ -90,7 +93,16 @@ bootstrap, and regression weights. Weights are treated as fixed: each
 unit is resampled together with its weight, and the weights are not
 re-estimated within replications. They enter the outcome model and the
 treatment model that measures the benchmark's strength, so every
-partial R2 is a weighted one.}
+partial R2 is a weighted one.
+\code{weights} may instead be a function that takes a data frame and returns
+one non-negative weight per row, for example inverse propensity score weights.
+It is called on the data and again on every resample, so that the weights are
+re-estimated within replications (Option 1 in Wainstein & Hazlett, 2026). A
+resample on which the function fails counts as a failed replication. A
+benchmark is then measured with the re-estimated weights themselves and not
+with the semi-weights that Wainstein and Hazlett propose for covariates that
+enter the weights, so supply \code{r2dz.x} and \code{r2yz.dx} if you need
+their bound.}
 
 \item{progress}{Logical: show a progress bar (default TRUE).}
 
@@ -104,6 +116,22 @@ summarises how much they still move, overall and from \code{threshold}
 replications onwards.}
 
 \item{verbose}{Logical; currently unused.}
+
+\item{fix_benchmark}{Logical. If \code{TRUE}, the partial R2 of the benchmark
+with the treatment and with the outcome are taken from the original fit in
+every replicate instead of being re-estimated there, so that the omitted
+variable has the same strength throughout. The table, the breakdown kd and
+\code{$boot_bench} then refer to that fixed strength. This is the bootstrap of
+Wainstein and Hazlett (2026), who hold the two partial R2 of the omitted
+variable fixed. It leaves out the uncertainty about how strong the benchmark
+is. Default \code{FALSE}.}
+
+\item{twoway_crit}{With two-way clustering, the reference distribution of the
+confidence interval, the p-value, the breakdown kd and the bootstrap
+robustness value: \code{"normal"} (the default, as in earlier versions) or
+\code{"t"}, a t distribution with \code{min(G, H) - 1} degrees of freedom,
+where \code{G} and \code{H} are the numbers of clusters in the two dimensions
+(Cameron, Gelbach & Miller, 2011). Ignored otherwise.}
 }
 \value{
 An object of class \code{"bootmakr"}, a list with (among others)
@@ -147,6 +175,15 @@ error times the square root of the residual degrees of freedom, in
 every replicate (a list of three such matrices with two-way
 clustering). The adjusted estimate for any strength of the omitted
 variable can be computed from these two columns.}
+\item{\code{se_compare}}{list with \code{$table}, one row per \code{kd} with
+the standard errors of the adjusted estimate (\code{bootstrap},
+\code{bootstrap_fixed}, \code{conventional}, \code{robust}),
+\code{$unadjusted} (conventional and robust standard error of the treatment
+coefficient), \code{$robust_type} and a \code{note} where one applies.}
+\item{\code{se_ratio}}{list with \code{omega}, the ratio of the robust to the
+conventional standard error of the treatment coefficient, \code{$benchmarks}
+(the ratio without each benchmark and the \code{change} when it is restored)
+and \code{cap}.}
 \item{\code{convergence}}{convergence diagnostics, if requested.}
 \item{\code{N}, \code{N_reps}, \code{N_successful}, \code{N_fail},
 \code{N_clust}}{sample size, replications requested, completed and
@@ -259,6 +296,37 @@ few percent from one seed to the next. The sign convention described for the
 robustness value applies to the breakdown kd as well, so with a weak effect
 the bootstrap value can exceed the conventional one for that reason alone.
 
+After the robustness values the print method sets the \strong{standard errors
+of the adjusted estimate} side by side, one row per \code{kd}. The first is
+the bootstrap standard error of the table. The second, shown when a benchmark
+is re-estimated in every replicate, is the bootstrap standard error with the
+strength of the omitted variable held at its value in the original fit. It is
+computed from the same replicates, and the difference between the two is the
+part of the uncertainty that comes from estimating the benchmark. The third is
+\code{sensemakr}'s adjusted standard error, which rests on the conventional
+OLS standard error. The fourth is the closed form of Wainstein and Hazlett
+(2026): the robust standard error of the original fit multiplied by
+\code{sqrt((1 - r2yz.dx) / (1 - r2dz.x))}, with one more regressor in its
+finite-sample correction. The robust standard error is HC1 without clusters,
+CR1 with one cluster variable and, as an extension made here, the Cameron,
+Gelbach and Miller combination of CR1 variances with two; strata are ignored.
+The closed form assumes that the omitted variable shrinks every residual of
+the outcome and of the treatment by the same proportion, and Acedanski (2026)
+shows that an omitted variable can move a robust standard error by much more
+than that. The last two standard errors refer to the regression that would
+include the omitted variable. The bootstrap refers to the sampling variability
+of the adjusted estimate, so the columns answer different questions and need
+not agree. They are stored in \code{$se_compare}.
+
+The print method ends with the \strong{ratio of the robust to the conventional
+standard error} of the treatment coefficient in the unadjusted regression, and
+with the change in that ratio when each benchmark covariate is taken out of
+the regression and put back (Acedanski, 2026, Section 6.2). A ratio away from
+one means that robust and conventional inference already differ before any
+omitted variable is considered. The change is a yardstick for how far one more
+covariate might move the ratio. Both are stored in \code{$se_ratio}, whose
+\code{cap} is the ratio plus the largest positive change.
+
 The bootstrap procedure follows Cinelli, Ferwerda and Hazlett (2024,
 Appendix C); Lonati and Wulff (2026) show why it is needed when the
 regression calls for robust standard errors.
@@ -304,6 +372,12 @@ Lonati, S., & Wulff, J. N. (2026). Why you should not use the ITCV with
 robust standard errors (and what to do instead). \emph{Academy of
 Management Proceedings}, 2026(1).
 \doi{10.5465/AMPROC.2026.247bp}
+
+Wainstein, L., & Hazlett, C. (2026). Sensitivity of weighted least squares
+estimators to omitted variables. arXiv:2508.02954.
+
+Acedanski, J. (2026). Robustness values with sandwich standard errors. Working
+paper, SSRN 7639842.
 }
 \seealso{
 \code{\link{print.bootmakr}}, \code{\link{plot.bootmakr}},
