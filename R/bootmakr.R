@@ -2294,8 +2294,11 @@ plot.bootmakr <- function(x, type = c("auto", "kd_sweep", "convergence", "histog
   }
   points(0, 0, pch = 17, cex = 1.1)
   if (any(pts)) {
-    lab <- if (all(is.na(res$kd[pts])) || identical(x$benchmark_strength$type, "manual"))
-      rep(x$bench_label, sum(pts)) else sprintf("%sx %s", format(res$kd[pts]), x$bench_label)
+    # label with the benchmark the table refers to; a manual bound otherwise
+    bench <- x$breakdown$benchmark
+    lab <- if (isTRUE(!is.na(bench))) sprintf("%sx %s", format(res$kd[pts]), bench)
+           else if (identical(x$benchmark_strength$type, "manual")) rep(x$bench_label, sum(pts))
+           else rep("manual R2", sum(pts))
     points(res$r2dz.x[pts], res$r2yz.dx[pts], pch = 23, bg = "navy", col = "navy", cex = 1.1)
     graphics::text(res$r2dz.x[pts], res$r2yz.dx[pts], lab, pos = 4, cex = 0.75, col = "navy")
   }

@@ -134,6 +134,9 @@ test_that("weights are re-estimated on the resample", {
   expect_length(seen, 31L)                      # original data and every resample
   fixed <- run(benchmark_covariates = "c", cluster = "firm", weights = wfun(firms), reps = 30, seed = 6)
   expect_equal(out$results$estimate, fixed$results$estimate)
+  # the re-estimated weights reach the fit of every replicate
+  expect_false(isTRUE(all.equal(out$boot_base, fixed$boot_base)))
+  expect_false(isTRUE(all.equal(out$results$se, fixed$results$se)))
   expect_equal(out$N_fail, 0L)
 })
 
