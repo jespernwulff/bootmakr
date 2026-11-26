@@ -125,9 +125,10 @@ test_that("constant weights from a function give the unweighted results", {
 })
 
 test_that("weights are re-estimated on the resample", {
-  # weights that depend on the sample: inverse of the share of each year in
-  # the data the function is given
-  wfun <- function(d) as.numeric(nrow(d) / table(d$year)[as.character(d$year)])
+  # weights that depend on the sample they are computed on, here through
+  # the mean of x in the data the function is given (weights from year
+  # shares would not do: the panel is balanced, so they are constant)
+  wfun <- function(d) 1 / (1 + (d$x - mean(d$x))^2)
   seen <- integer(0)
   spy  <- function(d) { seen <<- c(seen, nrow(d)); wfun(d) }
   out  <- run(benchmark_covariates = "c", cluster = "firm", weights = spy, reps = 30, seed = 6)
