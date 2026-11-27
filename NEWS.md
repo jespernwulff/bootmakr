@@ -1,3 +1,16 @@
+# bootmakr 0.4.1
+
+* Fixed: the columns `r2dz.x`, `r2yz.dx` and `impact` of `$results` now
+  describe the bound that the adjusted estimate in the same row refers to.
+  In 0.4.0 they described the first benchmark's bound, or the first manual
+  bound, in three situations: several `benchmark_covariates` with
+  `bounds_row` other than 1; a manual R² supplied together with a benchmark;
+  and several manual R² without a benchmark, with `bounds_row` other than 1
+  or with several `kd`. Adjusted estimates, standard errors, confidence
+  intervals and p-values were not affected, and neither were the printed
+  output, the plots, `$benchmark_strength`, or calls with one benchmark or
+  one manual R².
+
 # bootmakr 0.4.0
 
 * The benchmark-strength block now reports the **impact** of the assumed

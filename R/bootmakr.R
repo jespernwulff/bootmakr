@@ -322,7 +322,8 @@ bootmakr <- function(formula,
     n_clust      <- resample_info$n_clust
     method       <- "percentile"
   }
-  results <- .attach_r2(results, bench_strength, n_kd)
+  results <- .attach_r2(results, bench_strength, n_kd, r2dz.x, r2yz.dx,
+                        bounds_row, reduce)
 
   conv_out <- NULL
   if (conv_opts$do_converge) {
@@ -592,18 +593,41 @@ bootmakr <- function(formula,
 }
 
 #' Attach the implied r2dz.x / r2yz.dx and the impact of each kd row to the
-#' results table (first benchmark's rows, matching the adjusted estimates).
+#' results table. The rows are those the adjusted estimates come from: with
+#' single benchmarks sensemakr's bounds table lists the manual bound(s)
+#' first, then the benchmarks with kd varying within benchmark, and
+#' .get_adjusted_estimates() takes the first n_kd rows of it, or row
+#' `bounds_row` with a single kd. The same holds for several manual bounds
+#' without a benchmark. In 0.4.0 the first benchmark's rows (or the first
+#' manual bound) were attached whatever `bounds_row` said and whether or not
+#' a manual bound came first.
 #' @noRd
-.attach_r2 <- function(results, bs, n_kd) {
+.attach_r2 <- function(results, bs, n_kd, r2dz.x = NULL, r2yz.dx = NULL,
+                       bounds_row = 1, reduce = TRUE) {
   results$r2dz.x  <- NA_real_
   results$r2yz.dx <- NA_real_
   results$impact  <- NA_real_
   imp <- bs$implied
   if (is.null(imp) || nrow(imp) == 0) return(results)
   if (identical(bs$type, "manual")) {
-    results$r2dz.x  <- imp$r2dz.x[1]
-    results$r2yz.dx <- imp$r2yz.dx[1]
-    results$impact  <- imp$impact[1]
+    # one manual bound describes every row; with several, the rows are those
+    # of sensemakr's bounds table, as for the benchmarks below
+    idx <- if (nrow(imp) == 1) 1L else if (n_kd > 1) seq_len(n_kd) else as.integer(bounds_row)
+    results$r2dz.x  <- imp$r2dz.x[idx]
+    results$r2yz.dx <- imp$r2yz.dx[idx]
+    results$impact  <- imp$impact[idx]
+  } else if (identical(bs$type, "single")) {
+    all <- imp[, c("r2dz.x", "r2yz.dx", "impact")]
+    if (!is.null(r2dz.x)) {
+      r2y <- if (is.null(r2yz.dx)) r2dz.x else r2yz.dx
+      all <- rbind(data.frame(r2dz.x = r2dz.x, r2yz.dx = r2y,
+                              impact = .impact(r2dz.x, r2y, bs$r_yd.x, reduce)$impact),
+                   all)
+    }
+    idx <- if (n_kd > 1) seq_len(n_kd) else as.integer(bounds_row)
+    results$r2dz.x  <- all$r2dz.x[idx]
+    results$r2yz.dx <- all$r2yz.dx[idx]
+    results$impact  <- all$impact[idx]
   } else if (nrow(imp) >= n_kd) {
     results$r2dz.x  <- imp$r2dz.x[seq_len(n_kd)]
     results$r2yz.dx <- imp$r2yz.dx[seq_len(n_kd)]
