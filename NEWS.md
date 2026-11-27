@@ -21,7 +21,21 @@ This version lives on the `experimental` branch. The released package on
   list. The table, `fix_benchmark`, the breakdown kd (whose largest kd
   becomes `(1 - R2w) / R2s`) and the benchmark-strength block use the same
   bound; `$boot_bench` gains a third column. Nothing changes without the
-  argument.
+  argument, except for the warning in the next item.
+* A weight function together with a benchmark and no `semiweights` now gives
+  a **warning**: the benchmark is then measured with the weights themselves,
+  and weights built from the covariates leave it with a partial R² with the
+  treatment close to zero, so that the adjusted estimate understates the
+  bias. Results are unchanged. If the weights do not depend on the
+  benchmark, pass the weight function as `semiweights` as well: the results
+  are the same and the warning is not given. Weights given as a column or a
+  vector give no warning, because survey weights cannot be told apart from
+  estimated ones.
+* Help: the finite-sample corrections of the closed-form robust standard
+  error are stated (`n / (n - k)` for HC1, `G / (G - 1) * (n - 1) / (n - k)`
+  for CR1). The sign convention for replicates whose coefficient has the
+  opposite sign to the estimate is unchanged and remains that of
+  `sensemakr`.
 * New: **standard errors side by side**. After the robustness values
   `print()` shows, for each `kd`, the bootstrap standard error of the table
   next to three others: the bootstrap standard error with the benchmark's

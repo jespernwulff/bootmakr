@@ -203,3 +203,29 @@ test_that("misuse of semiweights stops; a failing function is a failed replicati
   expect_equal(sum(!is.finite(out$boot_samples[, 1])), 8L)
   expect_true(all(is.finite(out$boot_base)))       # coefficient and scale are kept
 })
+
+test_that("a weight function with a benchmark and no semi-weights warns; nothing else does", {
+  wf  <- function(d) d$w
+  msg <- "no `semiweights` are given"
+  one <- function(...) bootmakr(y ~ x + c, firms, treat = "x", cluster = "firm", reps = 20, seed = 11,
+                                progress = FALSE, ...)
+  expect_warning(a <- one(benchmark_covariates = "c", weights = wf), msg)
+  expect_warning(one(gbenchmark_covariates = "c", weights = wf), msg)
+  expect_warning(one(benchmark_covariates = "c", weights = wf, fix_benchmark = TRUE), msg)
+  # one warning per call, not one per replicate
+  n <- 0
+  withCallingHandlers(one(benchmark_covariates = "c", weights = wf),
+                      warning = function(w) { if (grepl(msg, conditionMessage(w))) n <<- n + 1
+                                              invokeRestart("muffleWarning") })
+  expect_equal(n, 1)
+  # no warning: semi-weights given, weights as a column, no weights, or no benchmark
+  expect_warning(b <- one(benchmark_covariates = "c", weights = wf, semiweights = wf), NA)
+  expect_warning(one(benchmark_covariates = "c", weights = wf, semiweights = function(d) d$s), NA)
+  expect_warning(one(benchmark_covariates = "c", weights = "w"), NA)
+  expect_warning(one(benchmark_covariates = "c"), NA)
+  expect_warning(one(r2dz.x = 0.01, r2yz.dx = 0.05, weights = wf), NA)
+  # the warning changes no result, and the weight function as semi-weights reproduces them
+  expect_equal(b$results, a$results, tolerance = 1e-12)
+  expect_equal(b$boot_samples, a$boot_samples, tolerance = 1e-12)
+  expect_equal(a$results, one(benchmark_covariates = "c", weights = "w")$results)
+})

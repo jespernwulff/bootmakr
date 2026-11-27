@@ -117,7 +117,13 @@
 #' with one more regressor in its finite-sample correction. The robust
 #' standard error is HC1 without clusters, CR1 with one cluster variable and,
 #' as an extension made here, the Cameron, Gelbach and Miller combination of
-#' CR1 variances with two; strata are ignored. The closed form assumes that
+#' CR1 variances with two; strata are ignored. The finite-sample corrections
+#' of the variance are \code{n / (n - k)} for HC1 and
+#' \code{G / (G - 1) * (n - 1) / (n - k)} for CR1, with \code{n} the number
+#' of observations with a positive weight, \code{G} the number of clusters
+#' and \code{k} the number of regressors, which for the adjusted standard
+#' error includes the omitted variable (equation 58 of Wainstein and Hazlett,
+#' 2026). The closed form assumes that
 #' the omitted variable shrinks every residual of the outcome and of the
 #' treatment by the same proportion, and Acedanski (2026) shows that an
 #' omitted variable can move a robust standard error by much more than that.
@@ -194,7 +200,8 @@
 #'   Wainstein & Hazlett, 2026). A resample on which the function fails counts
 #'   as a failed replication. Unless \code{semiweights} is given, a benchmark
 #'   is measured with the weights themselves; see \code{semiweights} for a
-#'   benchmark covariate that enters the weights.
+#'   benchmark covariate that enters the weights. A weight function together
+#'   with a benchmark and no \code{semiweights} gives a warning.
 #' @param dots Deprecated; use \code{progress} instead.
 #' @param progress Logical: show a progress bar (default TRUE).
 #' @param converge \code{TRUE}, \code{FALSE}, or
@@ -241,7 +248,11 @@
 #'   each formed without that covariate; \code{gbenchmark_covariates} takes
 #'   one entry, formed without the whole group. A resample on which a
 #'   semi-weight function fails counts as a failed replication. Default
-#'   \code{NULL}: the benchmark is measured with the weights.
+#'   \code{NULL}: the benchmark is measured with the weights. With a weight
+#'   function this default gives a warning, because estimated weights usually
+#'   depend on the covariates; if yours do not depend on the benchmark, pass
+#'   the weight function as \code{semiweights} too, which gives the same
+#'   results without the warning.
 #' @return An object of class \code{"bootmakr"}, a list with (among others)
 #'   \describe{
 #'     \item{\code{results}}{data frame with one row per \code{kd}: adjusted
@@ -436,6 +447,22 @@ bootmakr <- function(formula,
   semi          <- .resolve_semiweights(semiweights, data, weights, weight_fun,
                                         benchmark_covariates, gbenchmark_covariates)
   semi_orig     <- .semi_values(semi, data)
+  # Weights estimated from the data usually come from the covariates, and
+  # then they balance the benchmark between treated and control units: its
+  # partial R2 with the treatment under the weights is close to zero and the
+  # bound built on it understates the bias. Columns and vectors of weights
+  # cannot be told apart in this respect (survey weights are fine), so the
+  # warning is given for weight functions only.
+  if (!is.null(weight_fun) && is.null(semi) &&
+      (!is.null(benchmark_covariates) || !is.null(gbenchmark_covariates)))
+    warning("`weights` is a function and no `semiweights` are given, so the benchmark is ",
+            "measured with the weights themselves. Weights built from the covariates ",
+            "balance the benchmark between treated and control units; its partial R2 with ",
+            "the treatment is then close to zero and the adjusted estimate understates the ",
+            "bias. Supply `semiweights`, the weights formed without the benchmark. If the ",
+            "weights do not depend on the benchmark, pass the weight function as ",
+            "`semiweights` as well: the results are the same and this warning is not given.",
+            call. = FALSE)
   n_cluster_dims <- if (is.null(cluster_list)) 0L else length(cluster_list)
   is_twoway     <- n_cluster_dims == 2L
   if (is_twoway && !is.null(strata_vec))

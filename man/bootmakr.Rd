@@ -102,7 +102,8 @@ re-estimated within replications (Option 1 in Wainstein & Hazlett, 2026). A
 resample on which the function fails counts as a failed replication. Unless
 \code{semiweights} is given, a benchmark is measured with the weights
 themselves; see \code{semiweights} for a benchmark covariate that enters the
-weights.}
+weights. A weight function together with a benchmark and no
+\code{semiweights} gives a warning.}
 
 \item{progress}{Logical: show a progress bar (default TRUE).}
 
@@ -154,7 +155,10 @@ every resample, when \code{weights} is a function. With several
 formed without that covariate; \code{gbenchmark_covariates} takes one entry,
 formed without the whole group. A resample on which a semi-weight function
 fails counts as a failed replication. Default \code{NULL}: the benchmark is
-measured with the weights.}
+measured with the weights. With a weight function this default gives a
+warning, because estimated weights usually depend on the covariates; if yours
+do not depend on the benchmark, pass the weight function as
+\code{semiweights} too, which gives the same results without the warning.}
 }
 \value{
 An object of class \code{"bootmakr"}, a list with (among others)
@@ -338,6 +342,11 @@ OLS standard error. The fourth is the closed form of Wainstein and Hazlett
 finite-sample correction. The robust standard error is HC1 without clusters,
 CR1 with one cluster variable and, as an extension made here, the Cameron,
 Gelbach and Miller combination of CR1 variances with two; strata are ignored.
+The finite-sample corrections of the variance are \code{n / (n - k)} for HC1
+and \code{G / (G - 1) * (n - 1) / (n - k)} for CR1, with \code{n} the number
+of observations with a positive weight, \code{G} the number of clusters and
+\code{k} the number of regressors, which for the adjusted standard error
+includes the omitted variable (equation 58 of Wainstein and Hazlett, 2026).
 The closed form assumes that the omitted variable shrinks every residual of
 the outcome and of the treatment by the same proportion, and Acedanski (2026)
 shows that an omitted variable can move a robust standard error by much more
