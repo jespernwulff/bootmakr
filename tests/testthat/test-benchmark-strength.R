@@ -132,3 +132,83 @@ test_that("print shows the benchmark-strength block", {
   expect_true(any(grepl("female with treatment \\| X", txt)))
   expect_true(any(grepl("Implied strength of the omitted variable", txt)))
 })
+
+# The columns r2dz.x, r2yz.dx and impact of $results describe the row of
+# sensemakr's bounds table that the adjusted estimate is read from: manual
+# bound(s) first, then the benchmarks with kd varying within benchmark; the
+# first length(kd) rows with several kd, row `bounds_row` with one. 0.4.0
+# attached the first benchmark's bound (or the first manual one) throughout.
+expect_results_rows <- function(sm_args, rows, bounds_row = 1) {
+  out <- suppressWarnings(do.call(bootmakr, c(
+    list(light_formula, data = darfur_data, treat = "directlyharmed",
+         bounds_row = bounds_row, reps = 30, seed = 5, progress = FALSE),
+    sm_args)))
+  fit <- lm(light_formula, data = darfur_data)
+  sm  <- suppressWarnings(do.call(sensemakr::sensemakr, c(
+    list(model = fit, treatment = "directlyharmed"), sm_args)))
+  bn  <- sm$bounds[rows, ]
+  res <- out$results
+
+  # the same row of sensemakr's table as the estimate
+  expect_equal(res$estimate, bn$adjusted_estimate, tolerance = 1e-12)
+  expect_equal(res$r2dz.x,   bn$r2dz.x,            tolerance = 1e-12)
+  expect_equal(res$r2yz.dx,  bn$r2yz.dx,           tolerance = 1e-12)
+
+  # the estimate follows from the reported strength (no bounds table involved)
+  co     <- summary(fit)$coefficients
+  reduce <- if (is.null(sm_args$reduce)) TRUE else sm_args$reduce
+  expect_equal(
+    as.numeric(sensemakr::adjusted_estimate(
+      estimate = co["directlyharmed", "Estimate"],
+      se = co["directlyharmed", "Std. Error"], dof = fit$df.residual,
+      r2dz.x = res$r2dz.x, r2yz.dx = res$r2yz.dx, reduce = reduce)),
+    res$estimate, tolerance = 1e-10)
+
+  # impact: recursion formula applied to the reported strength
+  r_yd <- sign(co["directlyharmed", "Estimate"]) *
+    sqrt(unname(sensemakr::partial_r2(fit, covariates = "directlyharmed")))
+  s    <- if (reduce) sign(r_yd) else -sign(r_yd)
+  r_yz <- s * sqrt(res$r2yz.dx) * sqrt((1 - r_yd^2) * (1 - res$r2dz.x)) +
+    r_yd * sqrt(res$r2dz.x)
+  expect_equal(res$impact, r_yz * sqrt(res$r2dz.x), tolerance = 1e-12)
+  invisible(out)
+}
+
+test_that("results columns describe the benchmark selected with bounds_row", {
+  skip_helper()
+  two <- list(benchmark_covariates = c("female", "pastvoted"))
+  first  <- expect_results_rows(two, rows = 1)
+  second <- expect_results_rows(two, rows = 2, bounds_row = 2)
+  # the second row is pastvoted's bound and not female's
+  expect_equal(second$results$r2dz.x,
+               second$benchmark_strength$implied$r2dz.x[2], tolerance = 1e-12)
+  expect_false(isTRUE(all.equal(second$results$r2dz.x, first$results$r2dz.x)))
+  expect_results_rows(c(two, list(reduce = FALSE)), rows = 2, bounds_row = 2)
+  # several kd: the first benchmark's rows
+  expect_results_rows(c(two, list(kd = c(1, 2))), rows = 1:2)
+})
+
+test_that("results columns describe a manual bound given next to a benchmark", {
+  skip_helper()
+  man <- list(benchmark_covariates = "female", r2dz.x = 0.05, r2yz.dx = 0.02)
+  out <- expect_results_rows(man, rows = 1)
+  expect_equal(out$results$r2dz.x,  0.05)
+  expect_equal(out$results$r2yz.dx, 0.02)
+  # the benchmark is the second row of the table
+  out2 <- expect_results_rows(man, rows = 2, bounds_row = 2)
+  expect_equal(out2$results$r2dz.x,
+               out2$benchmark_strength$implied$r2dz.x[1], tolerance = 1e-12)
+  # several kd: the manual bound, then the benchmark at the first kd
+  expect_results_rows(c(man, list(kd = c(1, 2))), rows = 1:2)
+  expect_results_rows(c(man, list(reduce = FALSE)), rows = 1)
+})
+
+test_that("results columns describe the manual bound selected with bounds_row", {
+  skip_helper()
+  man <- list(r2dz.x = c(0.02, 0.05), r2yz.dx = c(0.03, 0.04))
+  out <- expect_results_rows(man, rows = 2, bounds_row = 2)
+  expect_equal(out$results$r2dz.x,  0.05)
+  expect_equal(out$results$r2yz.dx, 0.04)
+  expect_results_rows(man, rows = 1)
+  expect_results_rows(c(man, list(kd = c(1, 2))), rows = 1:2)
+})
