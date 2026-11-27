@@ -59,7 +59,9 @@
 #' benchmark that is strongly related to the treatment has a low limit, and
 #' close to the limit the bias grows without bound, so a breakdown kd near the
 #' limit reflects the limit more than the estimate. With \code{weights} both
-#' numbers use the weighted partial R2 of the benchmark. The breakdown kd is
+#' numbers use the weighted partial R2 of the benchmark, and with
+#' \code{semiweights} the bound of Wainstein and Hazlett (2026), whose limit
+#' is \code{(1 - R2w) / R2s}. The breakdown kd is
 #' available for \code{reduce = TRUE} and when the table reports a benchmark
 #' rather than a manual R2. It is stored in \code{$breakdown}.
 #'
@@ -190,10 +192,9 @@
 #'   score weights. It is called on the data and again on every resample, so
 #'   that the weights are re-estimated within replications (Option 1 in
 #'   Wainstein & Hazlett, 2026). A resample on which the function fails counts
-#'   as a failed replication. A benchmark is then measured with the
-#'   re-estimated weights themselves and not with the semi-weights that
-#'   Wainstein and Hazlett propose for covariates that enter the weights, so
-#'   supply \code{r2dz.x} and \code{r2yz.dx} if you need their bound.
+#'   as a failed replication. Unless \code{semiweights} is given, a benchmark
+#'   is measured with the weights themselves; see \code{semiweights} for a
+#'   benchmark covariate that enters the weights.
 #' @param dots Deprecated; use \code{progress} instead.
 #' @param progress Logical: show a progress bar (default TRUE).
 #' @param converge \code{TRUE}, \code{FALSE}, or
@@ -217,6 +218,30 @@
 #'   or \code{"t"}, a t distribution with \code{min(G, H) - 1} degrees of
 #'   freedom, where \code{G} and \code{H} are the numbers of clusters in the
 #'   two dimensions (Cameron, Gelbach & Miller, 2011). Ignored otherwise.
+#' @param semiweights Optional semi-weights for the benchmark (Wainstein &
+#'   Hazlett, 2026): weights formed in the same way as \code{weights} but
+#'   without the benchmark covariate. Weights that balance a covariate
+#'   between treated and control units remove its association with the
+#'   treatment, so that its weighted partial R2 with the treatment is close
+#'   to zero and says little about how strongly a variable like it can
+#'   confound. With \code{semiweights} that partial R2 is measured twice,
+#'   with the weights (\code{R2w}) and with the semi-weights (\code{R2s}),
+#'   and the bound on the omitted variable is that of Wainstein and Hazlett
+#'   (their equations 25 and 26), which starts from
+#'   \code{r2dz.x = kd * R2s / (1 - R2w)}. \code{kd} then compares the
+#'   omitted variable under the weights with the benchmark under the
+#'   semi-weights. This is their definition and not that of Cinelli and
+#'   Hazlett (2020); the two coincide, and the bound is sensemakr's, when the
+#'   semi-weights equal the weights. The outcome side is measured with the
+#'   weights throughout. Supply the semi-weights in the same form as
+#'   \code{weights}: a column name or a vector, resampled with the units,
+#'   when \code{weights} is one; a function of the data, called again on
+#'   every resample, when \code{weights} is a function. With several
+#'   \code{benchmark_covariates} give a list with one entry per covariate,
+#'   each formed without that covariate; \code{gbenchmark_covariates} takes
+#'   one entry, formed without the whole group. A resample on which a
+#'   semi-weight function fails counts as a failed replication. Default
+#'   \code{NULL}: the benchmark is measured with the weights.
 #' @return An object of class \code{"bootmakr"}, a list with (among others)
 #'   \describe{
 #'     \item{\code{results}}{data frame with one row per \code{kd}: adjusted
@@ -226,7 +251,9 @@
 #'       on, and its \code{impact}.}
 #'     \item{\code{benchmark_strength}}{list with \code{$observed} (partial
 #'       R2 of the benchmark with treatment and outcome, and their square
-#'       roots), \code{$implied} (sensemakr's bound on the omitted variable
+#'       roots; with \code{semiweights} also \code{r2dxj.x_semi}, the
+#'       partial R2 with the treatment under the semi-weights),
+#'       \code{$implied} (sensemakr's bound on the omitted variable
 #'       at each \code{kd}/\code{ky}: \code{r2dz.x}, \code{r2yz.dx}, their
 #'       square roots \code{r_dz.x}, \code{r_yz.dx}, the partial correlation
 #'       with the outcome given the covariates only, \code{r_yz.x}, and the
@@ -246,7 +273,9 @@
 #'     \item{\code{boot_bench}}{matrix with the partial R2 of that benchmark
 #'       with the treatment (\code{r2dxj.x}) and with the outcome
 #'       (\code{r2yxj.dx}) in every replicate (a list of three such matrices
-#'       with two-way clustering); \code{NA} without a benchmark.}
+#'       with two-way clustering); \code{NA} without a benchmark. With
+#'       \code{semiweights} a third column, \code{r2dxj.x_semi}, holds the
+#'       partial R2 with the treatment under the semi-weights.}
 #'     \item{\code{robustness}}{list with the robustness values of the
 #'       treatment coefficient: \code{rv_q} and \code{rv_qa} from
 #'       \code{sensemakr} (the latter at \code{alpha}, with the
@@ -363,7 +392,8 @@ bootmakr <- function(formula,
                      converge = FALSE,
                      verbose = FALSE,
                      fix_benchmark = FALSE,
-                     twoway_crit = c("normal", "t")) {
+                     twoway_crit = c("normal", "t"),
+                     semiweights = NULL) {
 
   cl <- match.call()
   if (is.null(ky)) ky <- kd
@@ -399,6 +429,13 @@ bootmakr <- function(formula,
   weight_fun    <- if (is.function(weights)) weights else NULL
   weight_vec    <- if (is.null(weight_fun)) .resolve_var(weights, data, "weights")
                    else .call_weight_fun(weight_fun, data)
+  # Semi-weights of the benchmark(s): the weights formed without the
+  # benchmark. One entry per benchmark covariate (one for a grouped
+  # benchmark), of the same kind as `weights`: vectors are resampled with
+  # their units, functions are called again on every resample.
+  semi          <- .resolve_semiweights(semiweights, data, weights, weight_fun,
+                                        benchmark_covariates, gbenchmark_covariates)
+  semi_orig     <- .semi_values(semi, data)
   n_cluster_dims <- if (is.null(cluster_list)) 0L else length(cluster_list)
   is_twoway     <- n_cluster_dims == 2L
   if (is_twoway && !is.null(strata_vec))
@@ -415,7 +452,8 @@ bootmakr <- function(formula,
   obs_estimates <- .get_adjusted_estimates(
     fit_orig, data, formula, treat, weight_vec,
     benchmark_covariates, gbenchmark_covariates,
-    kd, ky, q, alpha, r2dz.x, r2yz.dx, bound_label, reduce, bounds_row
+    kd, ky, q, alpha, r2dz.x, r2yz.dx, bound_label, reduce, bounds_row,
+    semi = semi_orig
   )
 
   # Also store the full sensemakr object for the first kd (for reference)
@@ -431,7 +469,7 @@ bootmakr <- function(formula,
   bench_strength <- .benchmark_strength(
     fit_orig, data, formula, treat, weight_vec,
     benchmark_covariates, gbenchmark_covariates,
-    kd, ky, r2dz.x, r2yz.dx, bound_label, reduce
+    kd, ky, r2dz.x, r2yz.dx, bound_label, reduce, semi = semi_orig
   )
 
   # ---- Set up resampling ----
@@ -458,7 +496,7 @@ bootmakr <- function(formula,
   # fit are used in every replicate instead of being re-estimated there
   base_fixed <- if (isTRUE(fix_benchmark))
     .bench_base(fit_orig, data, formula, treat, weight_vec,
-                benchmark_covariates, gbenchmark_covariates) else NULL
+                benchmark_covariates, gbenchmark_covariates, semi_orig) else NULL
 
   # Reference distribution of the two-way test: normal, or t with
   # min(G, H) - 1 degrees of freedom
@@ -471,6 +509,7 @@ bootmakr <- function(formula,
   loop_args <- list(
     reps = reps, data = data, formula = formula, treat = treat,
     weight_vec = weight_vec, weight_fun = weight_fun, base_fixed = base_fixed,
+    semi = semi,
     benchmark_covariates = benchmark_covariates,
     gbenchmark_covariates = gbenchmark_covariates,
     kd = kd, ky = ky, q = q, alpha = alpha,
@@ -570,6 +609,7 @@ bootmakr <- function(formula,
       se_ratio      = se_ratio,
       fix_benchmark = isTRUE(fix_benchmark),
       weights_reestimated = !is.null(weight_fun),
+      semiweights   = !is.null(semi),
       twoway_crit   = if (is_twoway) twoway_crit else NULL,
       crit_df       = crit_df,
       reduce        = reduce,
@@ -607,10 +647,12 @@ bootmakr <- function(formula,
                                     benchmark_covariates, gbenchmark_covariates,
                                     kd, ky, q, alpha, r2dz.x, r2yz.dx,
                                     bound_label, reduce, bounds_row,
-                                    base = NULL) {
+                                    base = NULL, semi = NULL) {
   # `base`: the benchmark's partial R2s if the caller has already computed
   # them for this fit with .bench_base() (the bootstrap loop does, to store
   # them); NULL computes them here.
+  # `semi`: semi-weights of the rows of `data`, one vector per benchmark, or
+  # NULL; see .ovb_bound().
   n_kd <- length(kd)
 
   if (!is.null(gbenchmark_covariates)) {
@@ -618,7 +660,8 @@ bootmakr <- function(formula,
     # 1.-2. Partial R2 of Y with Z_group given D, X (outcome model) and of
     #       D with Z_group given X (treatment model) -- see .group_base_r2()
     if (is.null(base))
-      base <- .group_base_r2(fit, data, formula, treat, weight_vec, gbenchmark_covariates)
+      base <- .group_base_r2(fit, data, formula, treat, weight_vec, gbenchmark_covariates,
+                             semi)
     r2yxj_base <- base$r2yxj.dx
     r2dxj_base <- base$r2dxj.x
 
@@ -630,9 +673,10 @@ bootmakr <- function(formula,
     dof    <- fit$df.residual
 
     vals <- vapply(seq_len(n_kd), function(i) {
-      bounds <- sensemakr::ovb_partial_r2_bound(
+      bounds <- .ovb_bound(
         r2dxj.x = r2dxj_base, r2yxj.dx = r2yxj_base,
-        kd = kd[i], ky = ky[i], bound_label = "group"
+        kd = kd[i], ky = ky[i], bound_label = "group",
+        r2dxj.x_semi = base$r2dxj.x_semi
       )
       sensemakr::adjusted_estimate(
         estimate = est, se = se, dof = dof,
@@ -674,11 +718,12 @@ bootmakr <- function(formula,
   }
 
   if (!is.null(benchmark_covariates)) {
-    if (is.null(base)) base <- .single_base_r2(fit, treat, benchmark_covariates)
+    if (is.null(base)) base <- .single_base_r2(fit, treat, benchmark_covariates, semi)
     for (j in seq_along(benchmark_covariates)) {
-      bnd <- sensemakr::ovb_partial_r2_bound(
+      bnd <- .ovb_bound(
         r2dxj.x = base$r2dxj.x[j], r2yxj.dx = base$r2yxj.dx[j],
-        kd = kd, ky = ky, bound_label = benchmark_covariates[j])
+        kd = kd, ky = ky, bound_label = benchmark_covariates[j],
+        r2dxj.x_semi = base$r2dxj.x_semi[j])
       vals <- c(vals, sensemakr::adjusted_estimate(
         estimate = est, se = se, dof = dof,
         r2dz.x = bnd$r2dz.x, r2yz.dx = bnd$r2yz.dx, reduce = reduce))
@@ -714,16 +759,26 @@ bootmakr <- function(formula,
 #' treatment and the other covariates (r2yxj.dx, from the outcome model) and
 #' with the treatment given the other covariates (r2dxj.x, from a treatment
 #' model treat ~ all other RHS terms). Shared by the bootstrap pathway and the
-#' descriptive block so that both report the same numbers.
+#' descriptive block so that both report the same numbers. With semi-weights
+#' (`semi`, a list holding one vector for the group) the treatment model is
+#' fitted a second time with them, and r2dxj.x_semi is the group's partial R2
+#' in that fit.
 #' @noRd
-.group_base_r2 <- function(fit, data, formula, treat, weight_vec, gbenchmark_covariates) {
+.group_base_r2 <- function(fit, data, formula, treat, weight_vec, gbenchmark_covariates,
+                           semi = NULL) {
   r2yxj.dx <- sensemakr::group_partial_r2(fit, covariates = gbenchmark_covariates)
   rhs_vars     <- attr(terms(formula), "term.labels")
   rhs_no_treat <- setdiff(rhs_vars, treat)
   treat_formula <- reformulate(rhs_no_treat, response = treat)
   fit_d <- .fit_lm(treat_formula, data, weight_vec)
   r2dxj.x <- sensemakr::group_partial_r2(fit_d, covariates = gbenchmark_covariates)
-  list(r2dxj.x = unname(r2dxj.x), r2yxj.dx = unname(r2yxj.dx))
+  out <- list(r2dxj.x = unname(r2dxj.x), r2yxj.dx = unname(r2yxj.dx))
+  if (!is.null(semi)) {
+    fit_s <- .fit_lm(treat_formula, data, semi[[1]])
+    out$r2dxj.x_semi <- unname(
+      sensemakr::group_partial_r2(fit_s, covariates = gbenchmark_covariates))
+  }
+  out
 }
 
 #' Treatment model as sensemakr's benchmarking routine builds it (model matrix
@@ -732,26 +787,46 @@ bootmakr <- function(formula,
 #' weights of the outcome model. sensemakr fits it unweighted even when the
 #' outcome model is weighted. `fit$weights` has one entry per model-matrix
 #' row, so the two stay aligned when rows are dropped for missing values.
+#' `w` replaces those weights, for the treatment model under semi-weights;
+#' it must have one entry per model-matrix row (see .rows_used()).
 #' @noRd
-.treatment_model_sm <- function(fit, treat) {
+.treatment_model_sm <- function(fit, treat, w = fit$weights) {
   m  <- model.matrix(fit)
   d  <- m[, treat]
   XX <- m[, !(colnames(m) %in% treat), drop = FALSE]
-  w_fit <- fit$weights
+  w_fit <- w
   if (is.null(w_fit)) lm(d ~ XX + 0) else lm(d ~ XX + 0, weights = w_fit)
+}
+
+#' Entries of a vector with one value per row of the data that belong to the
+#' rows lm() kept in `fit`.
+#' @noRd
+.rows_used <- function(v, fit) {
+  dropped <- as.integer(fit$na.action)
+  if (length(dropped)) v[-dropped] else v
 }
 
 #' Partial R2s of each single benchmark covariate: with the outcome given the
 #' treatment and the other covariates (r2yxj.dx, from the outcome model) and
 #' with the treatment given the other covariates (r2dxj.x, from the treatment
 #' model, weighted like the outcome model). Shared by the bootstrap pathway
-#' and the descriptive block so that both report the same numbers.
+#' and the descriptive block so that both report the same numbers. With
+#' semi-weights (`semi`, a list with one vector per benchmark covariate) the
+#' treatment model is fitted once more per benchmark with that benchmark's
+#' semi-weights, and r2dxj.x_semi is its partial R2 in that fit.
 #' @noRd
-.single_base_r2 <- function(fit, treat, benchmark_covariates) {
+.single_base_r2 <- function(fit, treat, benchmark_covariates, semi = NULL) {
   r2yxj.dx <- sensemakr::partial_r2(fit, covariates = benchmark_covariates)
   tm       <- .treatment_model_sm(fit, treat)
   r2dxj.x  <- sensemakr::partial_r2(tm, covariates = paste0("XX", benchmark_covariates))
-  list(r2dxj.x = unname(r2dxj.x), r2yxj.dx = unname(r2yxj.dx))
+  out <- list(r2dxj.x = unname(r2dxj.x), r2yxj.dx = unname(r2yxj.dx))
+  if (!is.null(semi)) {
+    out$r2dxj.x_semi <- vapply(seq_along(benchmark_covariates), function(j) {
+      tm_s <- .treatment_model_sm(fit, treat, w = .rows_used(semi[[j]], fit))
+      unname(sensemakr::partial_r2(tm_s, covariates = paste0("XX", benchmark_covariates[j])))
+    }, numeric(1))
+  }
+  out
 }
 
 #' Descriptive benchmark strength.
@@ -776,19 +851,22 @@ bootmakr <- function(formula,
 .benchmark_strength <- function(fit, data, formula, treat, weight_vec,
                                 benchmark_covariates, gbenchmark_covariates,
                                 kd, ky, r2dz.x, r2yz.dx, bound_label,
-                                reduce = TRUE) {
+                                reduce = TRUE, semi = NULL) {
   n_kd <- length(kd)
   out  <- tryCatch({
     if (!is.null(gbenchmark_covariates)) {
-      base  <- .group_base_r2(fit, data, formula, treat, weight_vec, gbenchmark_covariates)
+      base  <- .group_base_r2(fit, data, formula, treat, weight_vec, gbenchmark_covariates,
+                              semi)
       label <- paste(gbenchmark_covariates, collapse = " + ")
       observed <- data.frame(benchmark = label,
                              r2dxj.x = base$r2dxj.x, r2yxj.dx = base$r2yxj.dx,
                              stringsAsFactors = FALSE)
+      observed$r2dxj.x_semi <- base$r2dxj.x_semi
       implied <- do.call(rbind, lapply(seq_len(n_kd), function(i) {
-        b <- sensemakr::ovb_partial_r2_bound(
+        b <- .ovb_bound(
           r2dxj.x = base$r2dxj.x, r2yxj.dx = base$r2yxj.dx,
-          kd = kd[i], ky = ky[i], bound_label = "group"
+          kd = kd[i], ky = ky[i], bound_label = "group",
+          r2dxj.x_semi = base$r2dxj.x_semi
         )
         data.frame(benchmark = label, kd = kd[i], ky = ky[i],
                    r2dz.x = b$r2dz.x, r2yz.dx = b$r2yz.dx,
@@ -798,19 +876,21 @@ bootmakr <- function(formula,
     } else if (!is.null(benchmark_covariates)) {
       # Observed strength, computed as in sensemakr's benchmarking routine
       # but with the treatment model weighted like the outcome model
-      base <- .single_base_r2(fit, treat, benchmark_covariates)
+      base <- .single_base_r2(fit, treat, benchmark_covariates, semi)
       observed <- data.frame(benchmark = benchmark_covariates,
                              r2dxj.x = base$r2dxj.x, r2yxj.dx = base$r2yxj.dx,
                              stringsAsFactors = FALSE)
+      observed$r2dxj.x_semi <- base$r2dxj.x_semi
       # Implied strength of the omitted variable: sensemakr's bound formula
       # applied to those partial R2s (rows ordered benchmark-by-benchmark, kd
       # within benchmark -- the same order used for the adjusted estimates).
       # Not sensemakr::ovb_bounds(fit, ...), which would refit the treatment
       # model without the weights.
       implied <- do.call(rbind, lapply(seq_along(benchmark_covariates), function(j) {
-        b <- sensemakr::ovb_partial_r2_bound(
+        b <- .ovb_bound(
           r2dxj.x = base$r2dxj.x[j], r2yxj.dx = base$r2yxj.dx[j],
-          kd = kd, ky = ky, bound_label = benchmark_covariates[j]
+          kd = kd, ky = ky, bound_label = benchmark_covariates[j],
+          r2dxj.x_semi = base$r2dxj.x_semi[j]
         )
         data.frame(benchmark = benchmark_covariates[j], kd = kd, ky = ky,
                    r2dz.x = b$r2dz.x, r2yz.dx = b$r2yz.dx,
@@ -845,6 +925,8 @@ bootmakr <- function(formula,
   if (!is.null(out$observed)) {
     out$observed$r_dxj.x  <- sqrt(out$observed$r2dxj.x)
     out$observed$r_yxj.dx <- sqrt(out$observed$r2yxj.dx)
+    if (!is.null(out$observed$r2dxj.x_semi))
+      out$observed$r_dxj.x_semi <- sqrt(out$observed$r2dxj.x_semi)
     rownames(out$observed) <- NULL
   }
   out
@@ -926,11 +1008,14 @@ bootmakr <- function(formula,
   f2 <- function(v) ifelse(is.na(v), "   .", formatC(v, format = "f", digits = 2))
 
   ob <- bs$observed
+  has_semi <- !is.null(ob$r2dxj.x_semi)
   if (!is.null(ob) && nrow(ob) > 0) {
     rows <- unlist(lapply(seq_len(nrow(ob)), function(i) c(
       sprintf("%s with treatment | X", ob$benchmark[i]),
+      if (has_semi) sprintf("%s with treatment | X, semi-weights", ob$benchmark[i]),
       sprintf("%s with outcome | D, X", ob$benchmark[i]))))
-    r2   <- unlist(lapply(seq_len(nrow(ob)), function(i) c(ob$r2dxj.x[i], ob$r2yxj.dx[i])))
+    r2   <- unlist(lapply(seq_len(nrow(ob)), function(i) c(
+      ob$r2dxj.x[i], if (has_semi) ob$r2dxj.x_semi[i], ob$r2yxj.dx[i])))
     tab  <- data.frame(`Partial R2` = f4(r2), `|Partial r|` = f3(sqrt(r2)),
                        check.names = FALSE, stringsAsFactors = FALSE)
     rownames(tab) <- rows
@@ -939,7 +1024,9 @@ bootmakr <- function(formula,
 
   imp <- bs$implied
   if (!is.null(imp) && nrow(imp) > 0) {
-    cat("Implied strength of the omitted variable (sensemakr bounds):\n")
+    cat(if (has_semi)
+      "Implied strength of the omitted variable (bounds of Wainstein & Hazlett, 2026, with semi-weights):\n"
+      else "Implied strength of the omitted variable (sensemakr bounds):\n")
     tab2 <- data.frame(kd = f2(imp$kd), ky = f2(imp$ky),
                        `R2dz.x` = f4(imp$r2dz.x), `R2yz.dx` = f4(imp$r2yz.dx),
                        Impact = f3(imp$impact),
@@ -1097,7 +1184,8 @@ utils::globalVariables(".bootmakr_w")
                                 r2dz.x, r2yz.dx, bound_label, reduce,
                                 bounds_row, bench_idx = NA_integer_,
                                 show_progress, label = NULL,
-                                weight_fun = NULL, base_fixed = NULL) {
+                                weight_fun = NULL, base_fixed = NULL,
+                                semi = NULL) {
   n_kd     <- length(kd)
   boot_mat <- matrix(NA_real_, nrow = reps, ncol = n_kd)
   colnames(boot_mat) <- paste0("kd_", kd)
@@ -1105,8 +1193,11 @@ utils::globalVariables(".bootmakr_w")
   base_mat <- matrix(NA_real_, nrow = reps, ncol = 2,
                      dimnames = list(NULL, c("estimate", "scale")))
   # Partial R2s of the benchmark the table refers to, in every replicate
-  bench_mat <- matrix(NA_real_, nrow = reps, ncol = 2,
-                      dimnames = list(NULL, c("r2dxj.x", "r2yxj.dx")))
+  # (with semi-weights a third column, the treatment-side partial R2 under
+  # the semi-weights)
+  bench_cols <- c("r2dxj.x", "r2yxj.dx", if (!is.null(semi)) "r2dxj.x_semi")
+  bench_mat <- matrix(NA_real_, nrow = reps, ncol = length(bench_cols),
+                      dimnames = list(NULL, bench_cols))
   n_fail   <- 0L
 
   if (show_progress) {
@@ -1141,19 +1232,28 @@ utils::globalVariables(".bootmakr_w")
       # The benchmark's partial R2s are computed once here and handed on, so
       # that they are kept even when the bound at the requested kd fails.
       # With fix_benchmark they are those of the original fit throughout.
-      bench_b <- if (!is.null(base_fixed)) base_fixed else tryCatch(
+      # Semi-weights: resampled with their units, or re-estimated on the
+      # resample when they are functions. Not needed when the benchmark is
+      # held fixed. A resample on which a semi-weight function fails keeps
+      # its coefficient and scale but has no adjusted estimate.
+      semi_ok <- TRUE
+      semi_b  <- if (is.null(semi) || !is.null(base_fixed)) NULL else
+        tryCatch(.semi_values(semi, d_boot, boot_idx),
+                 error = function(e) { semi_ok <<- FALSE; NULL })
+      bench_b <- if (!is.null(base_fixed)) base_fixed else if (!semi_ok) NULL else tryCatch(
         .bench_base(fit_b, d_boot, formula, treat, w_b,
-                    benchmark_covariates, gbenchmark_covariates),
+                    benchmark_covariates, gbenchmark_covariates, semi_b),
         error = function(e) NULL)
       if (!is.null(bench_b) && !is.na(bench_idx) &&
           bench_idx >= 1L && bench_idx <= length(bench_b$r2dxj.x))
-        bench_mat[b, ] <- c(bench_b$r2dxj.x[bench_idx], bench_b$r2yxj.dx[bench_idx])
-      boot_mat[b, ] <- tryCatch(
+        bench_mat[b, ] <- c(bench_b$r2dxj.x[bench_idx], bench_b$r2yxj.dx[bench_idx],
+                            if (!is.null(semi)) bench_b$r2dxj.x_semi[bench_idx])
+      if (semi_ok) boot_mat[b, ] <- tryCatch(
         .get_adjusted_estimates(
           fit_b, d_boot, formula, treat, w_b,
           benchmark_covariates, gbenchmark_covariates,
           kd, ky, q, alpha, r2dz.x, r2yz.dx, bound_label, reduce, bounds_row,
-          base = bench_b
+          base = bench_b, semi = semi_b
         ), error = function(e) rep(NA_real_, n_kd))
     }
     if (any(!is.finite(boot_mat[b, ]))) n_fail <- n_fail + 1L
@@ -1324,18 +1424,22 @@ utils::globalVariables(".bootmakr_w")
 # closed form in kd and the benchmark's two partial R2s, and the adjusted
 # estimate a closed form in that bound, the coefficient and its scale. With
 # these four numbers stored for every replicate, the adjusted estimate of
-# every replicate can be evaluated at any kd without refitting.
+# every replicate can be evaluated at any kd without refitting. With
+# semi-weights there is a fifth number, the benchmark's partial R2 with the
+# treatment under the semi-weights (`r2s` below), and the bound is that of
+# Wainstein and Hazlett (2026); with r2s equal to r2d it is sensemakr's.
 
 #' Partial R2s of the benchmark(s) for one fit: the group if
 #' gbenchmark_covariates is given, otherwise one entry per benchmark
 #' covariate; NULL without a benchmark.
 #' @noRd
 .bench_base <- function(fit, data, formula, treat, weight_vec,
-                        benchmark_covariates, gbenchmark_covariates) {
+                        benchmark_covariates, gbenchmark_covariates, semi = NULL) {
   if (!is.null(gbenchmark_covariates))
-    return(.group_base_r2(fit, data, formula, treat, weight_vec, gbenchmark_covariates))
+    return(.group_base_r2(fit, data, formula, treat, weight_vec, gbenchmark_covariates,
+                          semi))
   if (!is.null(benchmark_covariates))
-    return(.single_base_r2(fit, treat, benchmark_covariates))
+    return(.single_base_r2(fit, treat, benchmark_covariates, semi))
   NULL
 }
 
@@ -1356,31 +1460,75 @@ utils::globalVariables(".bootmakr_w")
 }
 
 #' Largest kd the benchmark allows: sensemakr's bound on r2dz.x reaches one,
-#' and the bound stops with an error, at kd = (1 - r2dxj.x) / r2dxj.x.
+#' and the bound stops with an error, at kd = (1 - r2dxj.x) / r2dxj.x. With
+#' semi-weights the bound on r2dz.x is kd * r2s / (1 - r2d), so the limit is
+#' (1 - r2d) / r2s; the second condition of the bound, r2zxj.xd < 1, is
+#' kd * r2s < 1 - r2d as well.
 #' @noRd
-.kd_limit <- function(r2d) ifelse(r2d > 0, (1 - r2d) / r2d, Inf)
+.kd_limit <- function(r2d, r2s = r2d) ifelse(r2s > 0, (1 - r2d) / r2s, Inf)
 
-#' sensemakr's ovb_partial_r2_bound() with ky = kd, vectorised over
-#' benchmarks (replicates) and/or kd. NA where sensemakr stops with an error
-#' (kd at or beyond the limit); r2yz.dx is capped at one, as sensemakr does.
+#' Bound on the two partial R2s of the omitted variable, vectorised over
+#' benchmarks (replicates) and/or kd. `r2d` and `r2y` are the benchmark's
+#' partial R2 with the treatment and with the outcome under the weights of
+#' the regression, `r2s` its partial R2 with the treatment under the
+#' semi-weights. Wainstein and Hazlett (2026, equations 25 and 26):
+#'   r2dz.x  = kd * r2s / (1 - r2d)
+#'   r2zxj   = kd * r2s / (1 - kd * r2s) * r2d / (1 - r2d)
+#'   r2yz.dx = ((sqrt(ky) + sqrt(r2zxj)) / sqrt(1 - r2zxj))^2 * r2y / (1 - r2y)
+#' With r2s = r2d (the default: no semi-weights) this is sensemakr's
+#' ovb_partial_r2_bound(). NA where sensemakr stops with an error (kd at or
+#' beyond the limit); r2yz.dx is capped at one, as sensemakr does, and
+#' `capped` says where.
 #' @noRd
-.bound_at <- function(r2d, r2y, k) {
-  ok   <- is.finite(r2d) & is.finite(r2y) & r2d >= 0 & r2d < 1 & r2y >= 0 & r2y <= 1 &
-    k >= 0 & k < .kd_limit(r2d)
+.bound_at <- function(r2d, r2y, k, r2s = r2d, ky = k) {
+  force(r2s); force(ky)
+  ok   <- is.finite(r2d) & is.finite(r2y) & is.finite(r2s) & r2d >= 0 & r2d < 1 &
+    r2y >= 0 & r2y <= 1 & r2s >= 0 & r2s <= 1 & k >= 0 & k < .kd_limit(r2d, r2s)
   r2d  <- ifelse(ok, r2d, NA_real_)
-  r2dz <- k * r2d / (1 - r2d)
-  r2zx <- k * r2d^2 / ((1 - k * r2d) * (1 - r2d))
+  r2dz <- k * r2s / (1 - r2d)
+  r2zx <- k * (r2s * r2d) / ((1 - k * r2s) * (1 - r2d))
   bad  <- !is.na(r2dz) & (r2dz >= 1 | r2zx >= 1 | r2zx < 0)
   r2dz[bad] <- NA_real_; r2zx[bad] <- NA_real_
-  r2yz <- pmin(((sqrt(k) + sqrt(r2zx)) / sqrt(1 - r2zx))^2 * (r2y / (1 - r2y)), 1)
-  list(r2dz.x = r2dz, r2yz.dx = r2yz)
+  raw  <- ((sqrt(ky) + sqrt(r2zx)) / sqrt(1 - r2zx))^2 * (r2y / (1 - r2y))
+  list(r2dz.x = r2dz, r2yz.dx = pmin(raw, 1), capped = !is.na(raw) & raw > 1)
 }
+
+#' Bound for one benchmark, as a row per kd. Without semi-weights this is
+#' sensemakr::ovb_partial_r2_bound() itself, so that results without
+#' `semiweights` are those of sensemakr to the last digit. With them
+#' (`r2dxj.x_semi`, the benchmark's partial R2 with the treatment under the
+#' semi-weights) it is .bound_at(), with sensemakr's error when kd is at or
+#' beyond the limit and its warning when r2yz.dx is capped at one.
+#' @noRd
+.ovb_bound <- function(r2dxj.x, r2yxj.dx, kd = 1, ky = kd, bound_label = "manual",
+                       r2dxj.x_semi = NULL) {
+  if (is.null(r2dxj.x_semi))
+    return(sensemakr::ovb_partial_r2_bound(
+      r2dxj.x = r2dxj.x, r2yxj.dx = r2yxj.dx, kd = kd, ky = ky,
+      bound_label = bound_label))
+  r2 <- c(r2dxj.x, r2yxj.dx, r2dxj.x_semi)
+  if (!all(is.finite(r2)) || any(r2 < 0 | r2 > 1))
+    stop("partial R2 must be a number between zero and one")
+  b <- .bound_at(r2dxj.x, r2yxj.dx, kd, r2dxj.x_semi, ky)
+  if (anyNA(b$r2dz.x))
+    stop("Implied bound on r2dz.x >= 1. Impossible kd value. Try a lower kd.")
+  if (any(b$capped))
+    warning("Implied bound on r2yz.dx greater than 1, try lower kd and/or ky. Setting r2yz.dx to 1.")
+  data.frame(bound_label = bound_label, r2dz.x = b$r2dz.x, r2yz.dx = b$r2yz.dx,
+             stringsAsFactors = FALSE)
+}
+
+#' Partial R2 of the benchmark with the treatment under the semi-weights in
+#' a matrix of stored benchmark R2s: its third column if there is one,
+#' otherwise the first (no semi-weights).
+#' @noRd
+.bench_semi <- function(bench) if (ncol(bench) >= 3) bench[, 3] else bench[, 1]
 
 #' Adjusted estimate (reduce = TRUE) for an omitted variable k times as
 #' strong as the benchmark; NA where the bound does not exist.
 #' @noRd
-.adj_kd <- function(est, scale, r2d, r2y, k) {
-  b <- .bound_at(r2d, r2y, k)
+.adj_kd <- function(est, scale, r2d, r2y, k, r2s = r2d) {
+  b <- .bound_at(r2d, r2y, k, r2s)
   sign(est) * (abs(est) - scale * sqrt(b$r2yz.dx * b$r2dz.x / (1 - b$r2dz.x)))
 }
 
@@ -1390,12 +1538,12 @@ utils::globalVariables(".bootmakr_w")
 #' adjusted estimate is at or just beyond zero. Inf if the bias is zero
 #' throughout (benchmark unrelated to treatment or outcome).
 #' @noRd
-.kd_zero <- function(est, scale, r2d, r2y) {
-  lim <- .kd_limit(r2d)
+.kd_zero <- function(est, scale, r2d, r2y, r2s = r2d) {
+  lim <- .kd_limit(r2d, r2s)
   lo  <- rep(0, length(est))
   hi  <- ifelse(is.finite(lim), lim * (1 - 1e-12), NA_real_)
   g   <- function(k) abs(est) - scale * sqrt({
-    b <- .bound_at(r2d, r2y, k); b$r2yz.dx * b$r2dz.x / (1 - b$r2dz.x) })
+    b <- .bound_at(r2d, r2y, k, r2s); b$r2yz.dx * b$r2dz.x / (1 - b$r2dz.x) })
   never <- is.na(hi) | !is.finite(g(hi)) | g(hi) > 0
   hi[never] <- 0
   for (i in seq_len(200)) {
@@ -1422,17 +1570,19 @@ utils::globalVariables(".bootmakr_w")
 #' `k_limit`, the limit of the original fit.
 #' @noRd
 .breakdown_percentile <- function(base, bench, alpha, k_limit) {
+  semi_col <- .bench_semi(bench)
   ok <- is.finite(base[, "estimate"]) & is.finite(base[, "scale"]) & base[, "scale"] > 0 &
     is.finite(bench[, 1]) & is.finite(bench[, 2]) &
-    bench[, 1] >= 0 & bench[, 1] < 1 & bench[, 2] >= 0 & bench[, 2] <= 1
+    bench[, 1] >= 0 & bench[, 1] < 1 & bench[, 2] >= 0 & bench[, 2] <= 1 &
+    is.finite(semi_col) & semi_col >= 0 & semi_col <= 1
   e <- base[ok, "estimate"]; s <- base[ok, "scale"]
-  r2d <- bench[ok, 1]; r2y <- bench[ok, 2]; B <- length(e)
+  r2d <- bench[ok, 1]; r2y <- bench[ok, 2]; r2s <- semi_col[ok]; B <- length(e)
   out <- list(kd = NA_real_, n_used = NA_integer_, n_reps = B, note = NULL)
   if (B < 10) { out$note <- "Fewer than 10 usable replicates."; return(out) }
   if (2 * min(mean(e <= 0), mean(e >= 0)) >= alpha) { out$kd <- 0; out$n_used <- B; return(out) }
 
-  lim   <- .kd_limit(r2d)
-  cross <- pmin(.kd_zero(e, s, r2d, r2y), lim)      # crossing, or dropping out
+  lim   <- .kd_limit(r2d, r2s)
+  cross <- pmin(.kd_zero(e, s, r2d, r2y, r2s), lim) # crossing, or dropping out
   cand  <- sort(unique(c(cross, lim)))
   cand  <- cand[is.finite(cand) & cand < k_limit]
   if (length(cand) == 0) {
@@ -1480,7 +1630,8 @@ utils::globalVariables(".bootmakr_w")
   out <- list(kd = NA_real_, n_used = NA_integer_, n_reps = NA_integer_, note = NULL)
   dims <- c("G", "H", "GH")
   adj  <- function(d, k) .adj_kd(base_list[[d]][, "estimate"], base_list[[d]][, "scale"],
-                                 bench_list[[d]][, 1], bench_list[[d]][, 2], k)
+                                 bench_list[[d]][, 1], bench_list[[d]][, 2], k,
+                                 .bench_semi(bench_list[[d]]))
   out$n_reps <- min(vapply(dims, function(d) sum(is.finite(adj(d, 0))), integer(1)))
   z_crit <- .crit(alpha, crit_df)
   h <- function(k) {
@@ -1491,10 +1642,11 @@ utils::globalVariables(".bootmakr_w")
     if (anyNA(v)) return(NA_real_)
     v2 <- v[["G"]] + v[["H"]] - v[["GH"]]
     if (!is.finite(v2) || v2 < 0) v2 <- max(v[["G"]], v[["H"]])
-    abs(.adj_kd(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2], k)) / sqrt(v2) - z_crit
+    abs(.adj_kd(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2], k, obs_bench[3])) /
+      sqrt(v2) - z_crit
   }
   # the adjusted estimate of the original fit is zero at its own crossing
-  upper <- .kd_zero(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2])
+  upper <- .kd_zero(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2], obs_bench[3])
   if (!is.finite(upper)) {
     out$note <- "The estimate stays significant for every kd the benchmark allows."
     return(out)
@@ -1516,13 +1668,13 @@ utils::globalVariables(".bootmakr_w")
 #' crossing is taken.
 #' @noRd
 .breakdown_conventional <- function(obs, obs_bench, dof, alpha) {
-  upper <- .kd_zero(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2])
+  upper <- .kd_zero(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2], obs_bench[3])
   if (!is.finite(upper) || !is.finite(dof) || dof < 2) return(NA_real_)
   t_crit <- stats::qt(1 - alpha / 2, df = dof)
   h <- function(k) {
-    b  <- .bound_at(obs_bench[1], obs_bench[2], k)
+    b  <- .bound_at(obs_bench[1], obs_bench[2], k, obs_bench[3])
     se <- sqrt((1 - b$r2yz.dx) / (1 - b$r2dz.x)) * obs[[2]] / sqrt(dof) * sqrt(dof / (dof - 1))
-    a  <- .adj_kd(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2], k)
+    a  <- .adj_kd(obs[[1]], obs[[2]], obs_bench[1], obs_bench[2], k, obs_bench[3])
     if (!is.finite(se) || se <= 0) return(if (isTRUE(a == 0)) -t_crit else Inf)
     abs(a) / se - t_crit
   }
@@ -1544,8 +1696,12 @@ utils::globalVariables(".bootmakr_w")
     return(out)
   }
   out$benchmark <- obs_tab$benchmark[bench_idx]
-  obs_bench <- c(obs_tab$r2dxj.x[bench_idx], obs_tab$r2yxj.dx[bench_idx])
-  out$kd_limit <- unname(.kd_limit(obs_bench[1]))
+  # third entry: the partial R2 with the treatment under the semi-weights,
+  # or under the weights again when there are none
+  obs_bench <- c(obs_tab$r2dxj.x[bench_idx], obs_tab$r2yxj.dx[bench_idx],
+                 if (is.null(obs_tab$r2dxj.x_semi)) obs_tab$r2dxj.x[bench_idx]
+                 else obs_tab$r2dxj.x_semi[bench_idx])
+  out$kd_limit <- unname(.kd_limit(obs_bench[1], obs_bench[3]))
   if (!isTRUE(reduce)) {
     out$note <- "The breakdown kd is defined for reduce = TRUE only."
     return(out)
@@ -1765,12 +1921,70 @@ utils::globalVariables(".bootmakr_w")
 #' Call a user-supplied weight function on a data set and check what it
 #' returns.
 #' @noRd
-.call_weight_fun <- function(fun, data) {
+.call_weight_fun <- function(fun, data, label = "weights") {
   w <- fun(data)
   if (!is.numeric(w) || length(w) != nrow(data) || anyNA(w) || any(w < 0))
-    stop("A `weights` function must return one non-negative number per row of ",
+    stop("A `", label, "` function must return one non-negative number per row of ",
          "the data it is given.", call. = FALSE)
   as.numeric(w)
+}
+
+#' Check `semiweights` and bring it into one form: NULL, or a list with
+#' `kind` ("vector" or "function") and `items`, one per benchmark covariate
+#' (one for a grouped benchmark). Semi-weights must be of the same kind as
+#' the weights, so that both are resampled with their units or both are
+#' re-estimated on every resample.
+#' @noRd
+.resolve_semiweights <- function(semiweights, data, weights, weight_fun,
+                                 benchmark_covariates, gbenchmark_covariates) {
+  if (is.null(semiweights)) return(NULL)
+  if (is.null(weights))
+    stop("`semiweights` needs `weights`: semi-weights are the weights formed ",
+         "without the benchmark.", call. = FALSE)
+  n_b <- if (!is.null(gbenchmark_covariates)) 1L else length(benchmark_covariates)
+  if (n_b == 0L)
+    stop("`semiweights` needs a benchmark (`benchmark_covariates` or ",
+         "`gbenchmark_covariates`).", call. = FALSE)
+  items <- if (is.list(semiweights) && !is.data.frame(semiweights)) semiweights
+           else if (is.character(semiweights) && all(semiweights %in% names(data)))
+             as.list(semiweights)
+           else list(semiweights)
+  if (length(items) != n_b)
+    stop(sprintf(paste0(
+      "`semiweights` has %d entr%s but there %s %d benchmark%s: give a list with one ",
+      "entry per benchmark covariate (a grouped benchmark takes one)."),
+      length(items), if (length(items) == 1) "y" else "ies",
+      if (n_b == 1) "is" else "are", n_b, if (n_b == 1) "" else "s"), call. = FALSE)
+  is_fun <- vapply(items, is.function, logical(1))
+  if (!is.null(weight_fun)) {
+    if (!all(is_fun))
+      stop("`weights` is a function, so `semiweights` must be a function too (or a ",
+           "list of functions): both are then re-estimated on every resample.",
+           call. = FALSE)
+    return(list(kind = "function", items = items))
+  }
+  if (any(is_fun))
+    stop("`weights` is a column or a vector, so `semiweights` must be one too (or a ",
+         "list of them): both are then resampled with their units.", call. = FALSE)
+  vecs <- lapply(items, function(v) {
+    v <- .resolve_var(v, data, "semiweights")
+    if (!is.numeric(v) || anyNA(v) || any(v < 0))
+      stop("`semiweights` must be non-negative numbers without missing values.",
+           call. = FALSE)
+    as.numeric(v)
+  })
+  list(kind = "vector", items = vecs)
+}
+
+#' Semi-weights for one data set, a list with one vector per benchmark:
+#' functions are called on `data`; vectors are returned as they are, or the
+#' entries `idx` of them for a resample. NULL without semi-weights.
+#' @noRd
+.semi_values <- function(semi, data, idx = NULL) {
+  if (is.null(semi)) return(NULL)
+  if (identical(semi$kind, "function"))
+    return(lapply(semi$items, .call_weight_fun, data = data, label = "semiweights"))
+  if (is.null(idx)) semi$items else lapply(semi$items, function(v) v[idx])
 }
 
 
@@ -2098,6 +2312,8 @@ print.bootmakr <- function(x, ...) {
     cat("Benchmark strength held at its value in the original fit (fix_benchmark = TRUE)\n")
   if (isTRUE(x$weights_reestimated))
     cat("Weights re-estimated in every replication\n")
+  if (isTRUE(x$semiweights))
+    cat("Benchmark measured with semi-weights (Wainstein & Hazlett, 2026)\n")
   crit_df <- if (is.null(x$crit_df)) Inf else x$crit_df
 
   alpha  <- x$alpha

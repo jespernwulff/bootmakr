@@ -29,7 +29,8 @@ bootmakr(
   converge = FALSE,
   verbose = FALSE,
   fix_benchmark = FALSE,
-  twoway_crit = c("normal", "t")
+  twoway_crit = c("normal", "t"),
+  semiweights = NULL
 )
 }
 \arguments{
@@ -98,11 +99,10 @@ partial R2 is a weighted one.
 one non-negative weight per row, for example inverse propensity score weights.
 It is called on the data and again on every resample, so that the weights are
 re-estimated within replications (Option 1 in Wainstein & Hazlett, 2026). A
-resample on which the function fails counts as a failed replication. A
-benchmark is then measured with the re-estimated weights themselves and not
-with the semi-weights that Wainstein and Hazlett propose for covariates that
-enter the weights, so supply \code{r2dz.x} and \code{r2yz.dx} if you need
-their bound.}
+resample on which the function fails counts as a failed replication. Unless
+\code{semiweights} is given, a benchmark is measured with the weights
+themselves; see \code{semiweights} for a benchmark covariate that enters the
+weights.}
 
 \item{progress}{Logical: show a progress bar (default TRUE).}
 
@@ -132,6 +132,29 @@ robustness value: \code{"normal"} (the default, as in earlier versions) or
 \code{"t"}, a t distribution with \code{min(G, H) - 1} degrees of freedom,
 where \code{G} and \code{H} are the numbers of clusters in the two dimensions
 (Cameron, Gelbach & Miller, 2011). Ignored otherwise.}
+
+\item{semiweights}{Optional semi-weights for the benchmark (Wainstein &
+Hazlett, 2026): weights formed in the same way as \code{weights} but without
+the benchmark covariate. Weights that balance a covariate between treated and
+control units remove its association with the treatment, so that its weighted
+partial R2 with the treatment is close to zero and says little about how
+strongly a variable like it can confound. With \code{semiweights} that partial
+R2 is measured twice, with the weights (\code{R2w}) and with the semi-weights
+(\code{R2s}), and the bound on the omitted variable is that of Wainstein and
+Hazlett (their equations 25 and 26), which starts from
+\code{r2dz.x = kd * R2s / (1 - R2w)}. \code{kd} then compares the omitted
+variable under the weights with the benchmark under the semi-weights. This is
+their definition and not that of Cinelli and Hazlett (2020); the two coincide,
+and the bound is sensemakr's, when the semi-weights equal the weights. The
+outcome side is measured with the weights throughout. Supply the semi-weights
+in the same form as \code{weights}: a column name or a vector, resampled with
+the units, when \code{weights} is one; a function of the data, called again on
+every resample, when \code{weights} is a function. With several
+\code{benchmark_covariates} give a list with one entry per covariate, each
+formed without that covariate; \code{gbenchmark_covariates} takes one entry,
+formed without the whole group. A resample on which a semi-weight function
+fails counts as a failed replication. Default \code{NULL}: the benchmark is
+measured with the weights.}
 }
 \value{
 An object of class \code{"bootmakr"}, a list with (among others)
@@ -143,7 +166,9 @@ omitted variable (\code{r2dz.x}, \code{r2yz.dx}) the row is based
 on, and its \code{impact}.}
 \item{\code{benchmark_strength}}{list with \code{$observed} (partial
 R2 of the benchmark with treatment and outcome, and their square
-roots), \code{$implied} (sensemakr's bound on the omitted variable
+roots; with \code{semiweights} also \code{r2dxj.x_semi}, the
+partial R2 with the treatment under the semi-weights),
+\code{$implied} (sensemakr's bound on the omitted variable
 at each \code{kd}/\code{ky}: \code{r2dz.x}, \code{r2yz.dx}, their
 square roots \code{r_dz.x}, \code{r_yz.dx}, the partial correlation
 with the outcome given the covariates only, \code{r_yz.x}, and the
@@ -162,7 +187,9 @@ and a \code{note} where one applies.}
 \item{\code{boot_bench}}{matrix with the partial R2 of that benchmark with the
 treatment (\code{r2dxj.x}) and with the outcome (\code{r2yxj.dx}) in every
 replicate (a list of three such matrices with two-way clustering); \code{NA}
-without a benchmark.}
+without a benchmark. With \code{semiweights} a third column,
+\code{r2dxj.x_semi}, holds the partial R2 with the treatment under the
+semi-weights.}
 \item{\code{robustness}}{list with the robustness values of the
 treatment coefficient: \code{rv_q} and \code{rv_qa} from
 \code{sensemakr} (the latter at \code{alpha}, with the
@@ -256,9 +283,10 @@ note says how many are left out at the reported value. A benchmark that is
 strongly related to the treatment has a low limit, and close to the limit the
 bias grows without bound, so a breakdown kd near the limit reflects the limit
 more than the estimate. With \code{weights} both numbers use the weighted
-partial R2 of the benchmark. The breakdown kd is available for \code{reduce =
-TRUE} and when the table reports a benchmark rather than a manual R2. It is
-stored in \code{$breakdown}.
+partial R2 of the benchmark, and with \code{semiweights} the bound of
+Wainstein and Hazlett (2026), whose limit is \code{(1 - R2w) / R2s}. The
+breakdown kd is available for \code{reduce = TRUE} and when the table reports
+a benchmark rather than a manual R2. It is stored in \code{$breakdown}.
 
 The print method also reports the \strong{robustness value} of the
 treatment coefficient, which needs no benchmark: the strength an omitted

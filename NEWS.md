@@ -3,6 +3,25 @@
 This version lives on the `experimental` branch. The released package on
 `master` is 0.4.0 and is not changed while the paper is under review.
 
+* New argument `semiweights`: **semi-weights for the benchmark** (Wainstein
+  and Hazlett, 2026). Weights that balance a covariate between treated and
+  control units remove its association with the treatment, so under the
+  weights its partial R² with the treatment is close to zero and the bound
+  built on it says little. Semi-weights are the weights formed without the
+  benchmark covariate. With them the benchmark's partial R² with the
+  treatment is measured twice, under the weights and under the
+  semi-weights, and the bound on the omitted variable is that of Wainstein
+  and Hazlett (their equations 25 and 26), `r2dz.x = kd * R2s / (1 - R2w)`
+  on the treatment side. `kd` then compares the omitted variable under the
+  weights with the benchmark under the semi-weights; with semi-weights
+  equal to the weights the bound is `sensemakr`'s. Semi-weights are given
+  in the same form as `weights`: a column or a vector, resampled with the
+  units, or a function of the data, called again on every resample so that
+  the bound is re-estimated with the weights. Several benchmarks take a
+  list. The table, `fix_benchmark`, the breakdown kd (whose largest kd
+  becomes `(1 - R2w) / R2s`) and the benchmark-strength block use the same
+  bound; `$boot_bench` gains a third column. Nothing changes without the
+  argument.
 * New: **standard errors side by side**. After the robustness values
   `print()` shows, for each `kd`, the bootstrap standard error of the table
   next to three others: the bootstrap standard error with the benchmark's
@@ -36,7 +55,7 @@ This version lives on the `experimental` branch. The released package on
 * `weights` may be a function of the data. It is then called on every
   resample, so the weights are re-estimated within replications (Option 1 of
   Wainstein and Hazlett, 2026). Benchmarks are measured with those weights
-  and not with their semi-weights.
+  unless `semiweights` is given (see above).
 * Fixed: with `bounds_row` other than 1, or with a manual R² supplied next
   to a benchmark, the columns `r2dz.x`, `r2yz.dx` and `impact` of `$results`
   described the first benchmark's bound and not the row the adjusted
